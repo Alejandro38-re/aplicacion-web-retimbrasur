@@ -1399,20 +1399,50 @@ function displayCenterInfo(centerId) {
     document.getElementById('centerInfo').style.display = 'block';
 }
 
-// Load equipment list for center
-function loadEquipmentList(centerId) {
-    const container = document.getElementById('equipmentListContainer');
-    const equipment = getEquipmentByCenter(centerId);
-    const center = getWorkCenter(centerId);
+// Filter equipment based on search and type
+function filterEquipment(searchTerm, typeFilter) {
+    if (!currentWorkCenter) return;
 
-    document.getElementById('centerNameTitle').textContent = center ? center.name : 'Equipos del Centro';
+    const equipment = getEquipmentByCenter(currentWorkCenter.id);
+    let filtered = equipment;
+
+    // Apply type filter
+    if (typeFilter && typeFilter !== 'all') {
+        filtered = filtered.filter(eq => eq.type === typeFilter);
+    }
+
+    // Apply search filter
+    if (searchTerm && searchTerm.trim() !== '') {
+        const search = searchTerm.toLowerCase().trim();
+        filtered = filtered.filter(eq => {
+            const id = (eq.id || '').toLowerCase();
+            const location = (eq.location || '').toLowerCase();
+            const manufacturer = (eq.manufacturer || '').toLowerCase();
+            const brand = (eq.brand || '').toLowerCase();
+            const model = (eq.model || '').toLowerCase();
+
+            return id.includes(search) ||
+                location.includes(search) ||
+                manufacturer.includes(search) ||
+                brand.includes(search) ||
+                model.includes(search);
+        });
+    }
+
+    // Display filtered equipment
+    displayEquipmentList(filtered, currentWorkCenter.id);
+}
+
+// Display equipment list (separated from filtering logic)
+function displayEquipmentList(equipment, centerId) {
+    const container = document.getElementById('equipmentListContainer');
 
     if (equipment.length === 0) {
         container.innerHTML = `
             <div style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
-                <div style="font-size: 4rem; margin-bottom: 20px;">🔧</div>
-                <h3>No hay equipos registrados</h3>
-                <p>Agrega un nuevo equipo para comenzar</p>
+                <div style="font-size: 4rem; margin-bottom: 20px;">🔍</div>
+                <h3>No se encontraron equipos</h3>
+                <p>Intenta con otros términos de búsqueda</p>
             </div>
         `;
         return;
@@ -1653,29 +1683,113 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== PHOTO CAPTURE FUNCTIONALITY =====
     let currentPhotoData = null;
 
+    // Function to compress image using Canvas API
+    function compressImage(file, maxWidth = 1024, quality = 0.8) {
+        return new Promise((resolve, reject) => {
+            // Validate file size (max 10MB before compression)
+            if (file.size > 10 * 1024 * 1024) {
+                reject(new Error('La foto es demasiado grande. Máximo 10MB'));
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    // Calculate new dimensions maintaining aspect ratio
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > maxWidth || height > maxWidth) {
+                        if (width > height) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        } else {
+                            width = Math.round((width * maxWidth) / height);
+                            height = maxWidth;
+                        }
+                    }
+
+                    // Create canvas for compression
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+
+                    // Optional: Fill background with white for transparent images
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, width, height);
+
+                    // Draw image on canvas
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Convert to JPEG with specified quality
+                    canvas.toBlob(
+                        (blob) => {
+                            const compressedReader = new FileReader();
+                            compressedReader.onloadend = () => {
+                                const originalSizeKB = (file.size / 1024).toFixed(2);
+                                const compressedSizeKB = (blob.size / 1024).toFixed(2);
+                                const compressionRatio = ((1 - blob.size / file.size) * 100).toFixed(1);
+
+                                console.log(`Image compressed: ${originalSizeKB}KB → ${compressedSizeKB}KB (${compressionRatio}% reduction)`);
+
+                                resolve({
+                                    dataUrl: compressedReader.result,
+                                    originalSize: file.size,
+                                    compressedSize: blob.size,
+                                    compressionRatio: compressionRatio
+                                });
+                            };
+                            compressedReader.readAsDataURL(blob);
+                        },
+                        'image/jpeg',
+                        quality
+                    );
+                };
+                img.onerror = () => reject(new Error('Error al cargar la imagen'));
+                img.src = e.target.result;
+            };
+            reader.onerror = () => reject(new Error('Error al leer el archivo'));
+            reader.readAsDataURL(file);
+        });
+    }
+
     const photoInput = document.getElementById('equipmentPhoto');
     const photoPreview = document.getElementById('photoPreview');
     const photoPreviewImg = document.getElementById('photoPreviewImg');
     const removePhotoBtn = document.getElementById('removePhoto');
 
     if (photoInput) {
-        photoInput.addEventListener('change', (e) => {
+        photoInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (file) {
-                // Validate file size (max 5MB)
-                if (file.size > 5 * 1024 * 1024) {
-                    showToast('La foto es demasiado grande. Máximo 5MB', 'error');
+                // Validate file type
+                if (!file.type.startsWith('image/')) {
+                    showToast('Por favor selecciona un archivo de imagen válido', 'error');
                     photoInput.value = '';
                     return;
                 }
 
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    currentPhotoData = event.target.result;
+                // Show loading toast
+                showToast('Comprimiendo imagen...', 'info');
+
+                try {
+                    // Compress the image
+                    const compressed = await compressImage(file, 1024, 0.8);
+
+                    currentPhotoData = compressed.dataUrl;
                     photoPreviewImg.src = currentPhotoData;
                     photoPreview.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
+
+                    // Show success message with compression stats
+                    const compressionMsg = `Imagen comprimida: ${(compressed.originalSize / 1024).toFixed(0)}KB → ${(compressed.compressedSize / 1024).toFixed(0)}KB (${compressed.compressionRatio}% reducción)`;
+                    showToast(compressionMsg, 'success');
+                } catch (error) {
+                    showToast(error.message || 'Error al procesar la imagen', 'error');
+                    photoInput.value = '';
+                }
             }
         });
     }
@@ -1836,6 +1950,96 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p>Agrega un nuevo equipo para comenzar</p>
                 </div>
             `;
+            // Reset search and filter
+            const searchInput = document.getElementById('equipmentSearchInput');
+            const typeFilter = document.getElementById('equipmentTypeFilter');
+            if (searchInput) searchInput.value = '';
+            if (typeFilter) typeFilter.value = 'all';
+            return;
+        }
+
+        // Display equipment with photos
+        renderEquipmentListWithPhotos(equipment, centerId);
+
+        // Setup search and filter event listeners
+        const searchInput = document.getElementById('equipmentSearchInput');
+        const typeFilter = document.getElementById('equipmentTypeFilter');
+
+        if (searchInput) {
+            // Reset search
+            searchInput.value = '';
+
+            // Remove previous listener if exists
+            const newSearchInput = searchInput.cloneNode(true);
+            searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+
+            newSearchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value;
+                const typeValue = typeFilter ? typeFilter.value : 'all';
+                filterEquipmentWithPhotos(searchTerm, typeValue, centerId);
+            });
+        }
+
+        if (typeFilter) {
+            // Reset filter
+            typeFilter.value = 'all';
+
+            // Remove previous listener if exists
+            const newTypeFilter = typeFilter.cloneNode(true);
+            typeFilter.parentNode.replaceChild(newTypeFilter, typeFilter);
+
+            newTypeFilter.addEventListener('change', (e) => {
+                const typeValue = e.target.value;
+                const searchTerm = searchInput ? searchInput.value : '';
+                filterEquipmentWithPhotos(searchTerm, typeValue, centerId);
+            });
+        }
+    };
+
+    // Filter equipment with photos
+    function filterEquipmentWithPhotos(searchTerm, typeFilter, centerId) {
+        const equipment = getEquipmentByCenter(centerId);
+        let filtered = equipment;
+
+        // Apply type filter
+        if (typeFilter && typeFilter !== 'all') {
+            filtered = filtered.filter(eq => eq.type === typeFilter);
+        }
+
+        // Apply search filter
+        if (searchTerm && searchTerm.trim() !== '') {
+            const search = searchTerm.toLowerCase().trim();
+            filtered = filtered.filter(eq => {
+                const id = (eq.id || '').toLowerCase();
+                const location = (eq.location || '').toLowerCase();
+                const manufacturer = (eq.manufacturer || '').toLowerCase();
+                const brand = (eq.brand || '').toLowerCase();
+                const model = (eq.model || '').toLowerCase();
+
+                return id.includes(search) ||
+                    location.includes(search) ||
+                    manufacturer.includes(search) ||
+                    brand.includes(search) ||
+                    model.includes(search);
+            });
+        }
+
+        // Display filtered equipment
+        renderEquipmentListWithPhotos(filtered, centerId);
+    }
+
+    // Render equipment list with photos
+    function renderEquipmentListWithPhotos(equipment, centerId) {
+        const container = document.getElementById('equipmentListContainer');
+
+        if (equipment.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
+                    <div style="font-size: 4rem; margin-bottom: 20px;">🔍</div>
+                    <h3>No se encontraron equipos</h3>
+                    <p>Intenta con otros términos de búsqueda</p>
+                </div>
+            `;
             return;
         }
 
@@ -1845,9 +2049,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 .filter(i => i.equipmentId === eq.id && i.workCenterId === centerId)
                 .sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0];
 
+            // Get photo from equipment or last inspection
+            const photoUrl = eq.photo || (lastInspection && lastInspection.photo) || null;
+
             return `
                 <div class="equipment-card saved-equipment" data-equipment-id="${eq.id}" data-type="${eq.type}">
                     <button class="btn-delete-equipment" data-equipment-id="${eq.id}">✕</button>
+
+                    ${photoUrl ? `
+                        <div class="equipment-photo-preview">
+                            <img src="${photoUrl}" alt="Foto del equipo">
+                        </div>
+                    ` : `
+                        <div class="equipment-photo-placeholder">
+                            <span class="placeholder-icon">📷</span>
+                            <span class="placeholder-text">Sin foto</span>
+                        </div>
+                    `}
+
                     <div class="card-icon">${typeInfo ? typeInfo.icon : '🔧'}</div>
                     <h3>${typeInfo ? typeInfo.name : eq.type}</h3>
                     <div class="equipment-details">
