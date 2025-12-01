@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Inspección PCI</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <header class="app-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <img src="Logo sin fondo.png" alt="Logo Empresa" class="logo-image">
+                <h1>Sistema de Inspección PCI</h1>
+            </div>
+            <div class="header-actions">
+                <button id="exportBtn" class="btn btn-secondary">
+                    <span class="icon">📊</span>
+                    Exportar Datos
+                </button>
+                <button id="historyBtn" class="btn btn-secondary">
+                    <span class="icon">📋</span>
+                    Historial
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Work Center Selection Screen -->
+        <div id="workCenterScreen" class="screen active">
+            <div class="welcome-container">
+                <div class="welcome-header">
+                    <h2>Selecciona Centro de Trabajo</h2>
+                    <p>Elige un centro existente o crea uno nuevo</p>
+                </div>
+
+                <!-- Center Selection -->
+                <div class="center-selection">
+                    <div class="form-group" style="max-width: 500px; margin: 0 auto 30px;">
+                        <label for="centerSelect">Centro de Trabajo</label>
+                        <select id="centerSelect" class="center-select">
+                            <option value="">-- Selecciona un centro --</option>
+                        </select>
+                    </div>
+
+                    <button id="newCenterBtn" class="btn btn-secondary" style="margin-bottom: 30px;">
+                        <span class="icon">➕</span>
+                        Nuevo Centro
+                    </button>
+
+                    <!-- Center Info Display -->
+                    <div id="centerInfo" class="center-info" style="display: none;">
+                        <div class="info-card">
+                            <h3 id="centerInfoName">Nombre del Centro</h3>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <span class="info-label">📍 Dirección:</span>
+                                    <span id="centerInfoAddress">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">🏢 Cliente:</span>
+                                    <span id="centerInfoClient">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">📞 Teléfono:</span>
+                                    <span id="centerInfoPhone">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">🔧 Equipos:</span>
+                                    <span id="centerInfoEquipment">0</span>
+                                </div>
+                            </div>
+                            <button id="continueToCenterBtn" class="btn btn-primary" style="margin-top: 20px;">
+                                Continuar →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Equipment Selection Screen -->
+        <div id="welcomeScreen" class="screen">
+            <div class="welcome-container">
+                <div class="welcome-header">
+                    <button id="backToCenterBtn" class="btn btn-ghost" style="float: left;">
+                        <span class="icon">←</span>
+                        Cambiar Centro
+                    </button>
+                    <h2 id="centerNameTitle">Equipos del Centro</h2>
+                    <p>Selecciona un equipo existente o crea uno nuevo</p>
+                </div>
+
+                <!-- Equipment List Container -->
+                <div id="equipmentListContainer" class="equipment-list">
+                    <!-- Equipment cards will be dynamically generated -->
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 1rem; margin-top: 30px; justify-content: center;">
+                    <button id="newEquipmentBtn" class="btn btn-primary">
+                        <span class="icon">➕</span>
+                        Nuevo Equipo
+                    </button>
+                    <button id="generateCenterReportBtn" class="btn btn-secondary" style="display: none;">
+                        <span class="icon">📄</span>
+                        Generar Informe del Centro
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inspection Form Screen -->
+        <div id="inspectionScreen" class="screen">
+            <div class="inspection-container">
+                <div class="inspection-header">
+                    <button id="backBtn" class="btn btn-ghost">
+                        <span class="icon">←</span>
+                        Volver
+                    </button>
+                    <div class="inspection-title">
+                        <h2 id="equipmentTitle">Inspección de Equipo</h2>
+                        <p id="equipmentSubtitle">Completa todos los campos requeridos</p>
+                    </div>
+                    <div class="progress-indicator">
+                        <span id="progressText">0%</span>
+                    </div>
+                </div>
+
+                <!-- Equipment Info Form -->
+                <div class="form-section">
+                    <h3 class="section-title">Información del Equipo</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="equipmentId">ID del Equipo *</label>
+                            <input type="text" id="equipmentId" required placeholder="Ej: EXT-001">
+                        </div>
+                        <div class="form-group">
+                            <label for="location">Ubicación *</label>
+                            <input type="text" id="location" required placeholder="Ej: Planta 1, Pasillo A">
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="equipmentPhoto">📸 Foto del Equipo</label>
+                            <input type="file" id="equipmentPhoto" accept="image/*" capture="environment"
+                                class="photo-input">
+                            <div id="photoPreview" class="photo-preview" style="display: none;">
+                                <img id="photoPreviewImg" src="" alt="Vista previa">
+                                <button type="button" id="removePhoto" class="btn-remove-photo">✕</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="inspectionDate">Fecha de Inspección *</label>
+                            <input type="date" id="inspectionDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="technician">Técnico *</label>
+                            <input type="text" id="technician" required placeholder="Nombre del técnico">
+                        </div>
+                        <div class="form-group">
+                            <label for="manufacturer">Fabricante</label>
+                            <input type="text" id="manufacturer" placeholder="Nombre del fabricante">
+                        </div>
+                        <div class="form-group">
+                            <label for="brand">Marca</label>
+                            <input type="text" id="brand" placeholder="Marca del equipo">
+                        </div>
+                        <div class="form-group">
+                            <label for="model">Modelo</label>
+                            <input type="text" id="model" placeholder="Modelo del equipo">
+                        </div>
+                        <div class="form-group">
+                            <label for="manufacturingDate">Fecha de Fabricación</label>
+                            <input type="date" id="manufacturingDate">
+                        </div>
+                        <div class="form-group">
+                            <label for="lastRetestDate">Último Retimbrado</label>
+                            <input type="date" id="lastRetestDate">
+                        </div>
+                    </div>
+
+                    <!-- Save Equipment Checkbox -->
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="saveEquipmentCheck" checked>
+                            <span>Guardar datos del equipo para futuras inspecciones</span>
+                        </label>
+                    </div>
+
+                    <div class="form-grid" style="margin-top: 20px;">
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="observations">Observaciones</label>
+                            <textarea id="observations" rows="4"
+                                placeholder="Añade cualquier observación relevante..."></textarea>
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="recommendations">Recomendaciones</label>
+                            <textarea id="recommendations" rows="4"
+                                placeholder="Recomendaciones para el mantenimiento..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Specific Data Container (Dynamic) -->
+                    <div id="specificDataContainer"></div>
+
+                    <!-- Checklist Container -->
+                    <div class="form-section">
+                        <h3 class="section-title">Lista de Verificación</h3>
+                        <div id="checklistContainer" class="checklist-container">
+                            <!-- Checklist items will be dynamically generated -->
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="form-actions">
+                        <button id="saveDraftBtn" class="btn btn-secondary">
+                            <span class="icon">💾</span>
+                            Guardar Borrador
+                        </button>
+                        <button id="addNextBtn" class="btn btn-primary" style="display: none;">
+                            <span class="icon">➕</span>
+                            Añadir y Siguiente
+                        </button>
+                        <button id="submitBtn" class="btn btn-primary">
+                            <span class="icon">✓</span>
+                            Terminar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Screen -->
+        <div id="historyScreen" class="screen">
+            <div class="history-container">
+                <div class="history-header">
+                    <button id="backToMainBtn" class="btn btn-ghost">
+                        <span class="icon">←</span>
+                        Volver
+                    </button>
+                    <h2>Historial de Inspecciones</h2>
+                    <div class="filter-group">
+                        <select id="filterCenter" class="filter-select" style="margin-right: 10px;">
+                            <option value="all">Todos los centros</option>
+                        </select>
+                        <select id="filterType" class="filter-select">
+                            <option value="all">Todos los equipos</option>
+                            <option value="extintores">Extintores</option>
+                            <option value="bies">BIEs</option>
+                            <option value="grupos-presion">Grupos de Presión</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="historyList" class="history-list">
+                    <!-- History items will be dynamically generated -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Modal for New Work Center -->
+    <div id="newCenterModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Nuevo Centro de Trabajo</h3>
+                <button class="modal-close" id="closeCenterModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="centerName">Nombre del Centro *</label>
+                        <input type="text" id="centerName" required placeholder="Ej: Fábrica Principal">
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="centerAddress">Dirección *</label>
+                        <input type="text" id="centerAddress" required placeholder="Calle, número, ciudad">
+                    </div>
+                    <div class="form-group">
+                        <label for="centerClient">Cliente</label>
+                        <input type="text" id="centerClient" placeholder="Nombre del cliente">
+                    </div>
+                    <div class="form-group">
+                        <label for="centerPhone">Teléfono</label>
+                        <input type="tel" id="centerPhone" placeholder="Teléfono de contacto">
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label for="centerNotes">Notas</label>
+                        <textarea id="centerNotes" rows="3" placeholder="Notas adicionales..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="saveCenterBtn" class="btn btn-primary">
+                    <span class="icon">✓</span>
+                    Guardar Centro
+                </button>
+                <button id="cancelCenterBtn" class="btn btn-secondary">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for New Equipment Type Selection -->
+    <div id="newEquipmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Selecciona Tipo de Equipo</h3>
+                <button class="modal-close" id="closeEquipmentModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="equipment-grid">
+                    <div class="equipment-card" data-type="extintores">
+                        <div class="card-icon">🧯</div>
+                        <h3>Extintores</h3>
+                        <p>Inspección de extintores portátiles</p>
+                    </div>
+                    <div class="equipment-card" data-type="bies">
+                        <div class="card-icon">🚰</div>
+                        <h3>BIEs</h3>
+                        <p>Bocas de incendio equipadas</p>
+                    </div>
+                    <div class="equipment-card" data-type="grupos-presion">
+                        <div class="card-icon">⚙️</div>
+                        <h3>Grupos de Presión</h3>
+                        <p>Sistemas de presurización</p>
+                    </div>
+                    <div class="equipment-card" data-type="hidrantes">
+                        <div class="card-icon">🚿</div>
+                        <h3>Hidrantes</h3>
+                        <p>Sistemas de hidrantes</p>
+                    </div>
+                    <div class="equipment-card" data-type="gas">
+                        <div class="card-icon">💨</div>
+                        <h3>Extinción por Gas</h3>
+                        <p>Sistemas de extinción gaseosa</p>
+                    </div>
+                    <div class="equipment-card" data-type="sprinklers">
+                        <div class="card-icon">💧</div>
+                        <h3>Sprinklers</h3>
+                        <p>Sistemas de rociadores</p>
+                    </div>
+                    <div class="equipment-card" data-type="agua-pulverizada">
+                        <div class="card-icon">🌊</div>
+                        <h3>Agua Pulverizada</h3>
+                        <p>Sistemas de diluvio</p>
+                    </div>
+                    <div class="equipment-card" data-type="deteccion">
+                        <div class="card-icon">🔔</div>
+                        <h3>Detección</h3>
+                        <p>Sistemas de detección</p>
+                    </div>
+                    <div class="equipment-card" data-type="espuma">
+                        <div class="card-icon">🧼</div>
+                        <h3>Sistemas Espuma</h3>
+                        <p>Extinción con espuma</p>
+                    </div>
+                    <div class="equipment-card" data-type="puertas-rf">
+                        <div class="card-icon">🚪</div>
+                        <h3>Puertas RF</h3>
+                        <p>Puertas resistentes al fuego</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Post-Inspection (Add Another Equipment) -->
+    <div id="postInspectionModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>✓ Inspección Completada</h3>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 40px 20px;">
+                <div style="font-size: 4rem; margin-bottom: 20px;">🎉</div>
+                <h3 style="margin-bottom: 10px; color: var(--text-primary);">¡Equipo inspeccionado correctamente!</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 30px;">¿Qué deseas hacer ahora?</p>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <button id="addAnotherEquipmentBtn" class="btn btn-primary">
+                        <span class="icon">➕</span>
+                        Agregar Otro Equipo
+                    </button>
+                    <button id="generateReportBtn" class="btn btn-secondary">
+                        <span class="icon">📄</span>
+                        Generar Informe
+                    </button>
+                    <button id="backToEquipmentListBtn" class="btn btn-ghost">
+                        Ver Lista de Equipos
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Report Preview -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Informe de Inspección</h3>
+                <button class="modal-close" id="closeReportModal">&times;</button>
+            </div>
+            <div class="modal-body" id="reportContent">
+                <!-- Report content will be generated here -->
+            </div>
+            <div class="modal-footer">
+                <button id="downloadPdfBtn" class="btn btn-primary">
+                    <span class="icon">📄</span>
+                    Descargar PDF
+                </button>
+                <button id="closeModalBtn" class="btn btn-secondary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

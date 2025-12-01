@@ -1,0 +1,1068 @@
+// ===== AppSheet Integration =====
+// Parse URL parameters from AppSheet
+function getURLParameters() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        // Client and Work Center Info
+        clientId: params.get('clientId') || '',
+        clientName: params.get('clientName') || '',
+        clientAddress: params.get('clientAddress') || '',
+        clientPhone: params.get('clientPhone') || '',
+        workCenterId: params.get('workCenterId') || '',
+        workCenterName: params.get('workCenterName') || '',
+        workCenterAddress: params.get('workCenterAddress') || '',
+
+        // Equipment Info (if coming from specific equipment)
+        equipmentId: params.get('equipmentId') || '',
+        equipmentType: params.get('equipmentType') || '',
+        equipmentLocation: params.get('equipmentLocation') || '',
+
+        // Technician Info
+        technicianName: params.get('technicianName') || '',
+        technicianId: params.get('technicianId') || '',
+
+        // AppSheet callback URL
+        returnUrl: params.get('returnUrl') || '',
+        appsheetMode: params.get('appsheetMode') === 'true'
+    };
+}
+
+// Global variable to store AppSheet data
+const appSheetData = getURLParameters();
+
+// Function to send data back to AppSheet
+function sendDataToAppSheet(inspection) {
+    if (!appSheetData.returnUrl) {
+        console.log('No return URL specified, data will only be stored locally');
+        return;
+    }
+
+    // Prepare data for AppSheet
+    const appSheetPayload = {
+        inspectionId: inspection.id,
+        clientId: appSheetData.clientId,
+        workCenterId: appSheetData.workCenterId,
+        equipmentType: inspection.equipmentType,
+        equipmentId: inspection.equipmentId,
+        location: inspection.location,
+        inspectionDate: inspection.inspectionDate,
+        technician: inspection.technician,
+        status: inspection.status,
+
+        // Results summary
+        totalItems: inspection.checklist.length,
+        conformeCount: inspection.checklist.filter(i => i.status === 'ok').length,
+        warningCount: inspection.checklist.filter(i => i.status === 'warning').length,
+        errorCount: inspection.checklist.filter(i => i.status === 'error').length,
+        completionPercentage: Math.round((inspection.checklist.filter(i => i.checked).length / inspection.checklist.length) * 100),
+
+        // Detailed results
+        checklistResults: JSON.stringify(inspection.checklist),
+        observations: inspection.observations,
+        recommendations: inspection.recommendations,
+
+        // Timestamps
+        createdAt: inspection.createdAt,
+        updatedAt: inspection.updatedAt
+    };
+
+    // Create form to submit data back to AppSheet
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = appSheetData.returnUrl;
+
+    // Add all data as hidden fields
+    Object.keys(appSheetPayload).forEach(key => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = appSheetPayload[key];
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// ===== Data Structures =====
+const equipmentTypes = {
+    'extintores': {
+        name: 'Extintores',
+        icon: '🧯',
+        checklist: [
+            'Accesibilidad y señalización correcta',
+            'Precinto y pasador en buen estado',
+            'Presión del manómetro en zona verde',
+            'Manguera y boquilla sin obstrucciones',
+            'Etiqueta de mantenimiento visible',
+            'Ausencia de golpes o corrosión',
+            'Peso correcto del extintor',
+            'Soporte de pared en buen estado',
+            'Distancia al suelo correcta (80-120cm)',
+            'Fecha de caducidad vigente',
+            'Instrucciones de uso legibles',
+            'Ausencia de fugas o derrames'
+        ]
+    },
+    'bies': {
+        name: 'BIEs (Bocas de Incendio Equipadas)',
+        icon: '🚰',
+        checklist: [
+            'Armario en buen estado y señalizado',
+            'Puerta del armario abre correctamente',
+            'Manguera sin deterioros ni roturas',
+            'Lanza y boquilla en buen estado',
+            'Válvula de apertura funcional',
+            'Manómetro en zona operativa',
+            'Racores sin fugas',
+            'Devanadera gira correctamente',
+            'Cristal del armario intacto',
+            'Iluminación de emergencia funcional',
+            'Ausencia de obstrucciones',
+            'Etiqueta de revisión actualizada',
+            'Conexión a red sin fugas',
+            'Longitud de manguera adecuada',
+            'Junta de racor en buen estado'
+        ]
+    },
+    'grupos-presion': {
+        name: 'Grupos de Presión',
+        icon: '⚙️',
+        checklist: [
+            'Bomba principal funciona correctamente',
+            'Bomba jockey operativa',
+            'Presiones de arranque y paro correctas',
+            'Manómetros calibrados y legibles',
+            'Ausencia de fugas en tuberías',
+            'Válvulas de retención operativas',
+            'Cuadro eléctrico sin anomalías',
+            'Alarmas acústicas y visuales funcionales',
+            'Nivel de combustible adecuado (si diesel)',
+            'Baterías en buen estado',
+            'Ventilación del local adecuada',
+            'Drenajes libres de obstrucciones',
+            'Depósito de agua con nivel correcto',
+            'Válvulas de prueba operativas',
+            'Registro de arranques actualizado',
+            'Ausencia de vibraciones anormales',
+            'Sistema de control automático funcional',
+            'Iluminación de emergencia operativa'
+        ]
+    },
+    'hidrantes': {
+        name: 'Hidrantes y Monitores',
+        icon: '🚿',
+        checklist: [
+            'Accesibilidad sin obstáculos',
+            'Señalización visible',
+            'Tapa y cuerpo sin daños',
+            'Válvula de apertura/cierre funcional',
+            'Racores en buen estado',
+            'Ausencia de fugas',
+            'Drenaje operativo',
+            'Pintura en buen estado',
+            'Distancia a edificios correcta',
+            'Presión de servicio adecuada',
+            'Tapones de racor presentes',
+            'Cadenas de tapa en buen estado',
+            'Arqueta sin agua acumulada',
+            'Válvula de pie operativa'
+        ]
+    },
+    'gas': {
+        name: 'Extinción por Gas',
+        icon: '💨',
+        checklist: [
+            'Botellas con presión correcta',
+            'Manómetros en zona verde',
+            'Válvulas de disparo operativas',
+            'Sistema de detección funcional',
+            'Pulsadores manuales accesibles',
+            'Señalización de zona protegida',
+            'Sirenas de pre-descarga funcionales',
+            'Cerramientos herméticos',
+            'Compuertas de ventilación operativas',
+            'Peso de botellas correcto',
+            'Ausencia de corrosión en botellas',
+            'Etiquetas de identificación legibles',
+            'Sistema de retardo funcional',
+            'Pulsadores de aborto operativos',
+            'Iluminación de emergencia',
+            'Ventilación post-descarga funcional',
+            'Cuadro de control sin alarmas',
+            'Baterías de respaldo cargadas',
+            'Registro de inspecciones actualizado',
+            'Certificado de agente extintor vigente'
+        ]
+    },
+    'sprinklers': {
+        name: 'Sprinklers (Rociadores)',
+        icon: '💧',
+        checklist: [
+            'Rociadores sin obstrucciones',
+            'Ausencia de pintura en rociadores',
+            'Deflectores en buen estado',
+            'Distancia a almacenamiento correcta',
+            'Válvula de alarma operativa',
+            'Presostatos funcionales',
+            'Gong de alarma audible',
+            'Manómetros en zona correcta',
+            'Válvulas de control abiertas y precintadas',
+            'Ausencia de fugas en tuberías',
+            'Drenajes operativos',
+            'Rociadores de repuesto disponibles',
+            'Etiquetas de identificación presentes',
+            'Sistema de supervisión funcional',
+            'Compresores de aire operativos (sistema seco)',
+            'Ausencia de corrosión en tuberías'
+        ]
+    },
+    'agua-pulverizada': {
+        name: 'Agua Pulverizada - Diluvio',
+        icon: '🌊',
+        checklist: [
+            'Boquillas sin obstrucciones',
+            'Válvula de diluvio operativa',
+            'Sistema de detección funcional',
+            'Presostatos calibrados',
+            'Manómetros legibles',
+            'Ausencia de fugas',
+            'Filtros limpios',
+            'Drenajes operativos',
+            'Válvulas de prueba funcionales',
+            'Cuadro de control sin alarmas',
+            'Cableado en buen estado',
+            'Señalización adecuada',
+            'Pulsadores manuales accesibles',
+            'Sistema de supervisión activo',
+            'Baterías de respaldo cargadas',
+            'Registro de pruebas actualizado',
+            'Ausencia de corrosión en boquillas'
+        ]
+    },
+    'deteccion': {
+        name: 'Sistemas de Detección',
+        icon: '🔔',
+        checklist: [
+            'Central de detección sin alarmas',
+            'Detectores limpios y operativos',
+            'Pulsadores manuales funcionales',
+            'Sirenas audibles en toda la zona',
+            'Señalización luminosa operativa',
+            'Baterías de respaldo cargadas',
+            'Cableado sin daños visibles',
+            'Etiquetas de identificación presentes',
+            'Zonas correctamente identificadas',
+            'Ausencia de detectores obstruidos',
+            'Prueba de funcionamiento positiva',
+            'Registro de eventos actualizado',
+            'Conexión a central receptora activa',
+            'Módulos de control operativos',
+            'Ausencia de falsos positivos',
+            'Iluminación de emergencia funcional',
+            'Planos de zonas actualizados',
+            'Personal formado en uso del sistema',
+            'Protocolo de evacuación visible',
+            'Simulacros realizados según normativa',
+            'Certificado de instalación vigente',
+            'Mantenimiento preventivo al día'
+        ]
+    },
+    'espuma': {
+        name: 'Sistemas de Espuma',
+        icon: '🧼',
+        checklist: [
+            'Tanque de espumógeno con nivel correcto',
+            'Concentración de espumógeno adecuada',
+            'Proporcionador calibrado',
+            'Lanzas de espuma operativas',
+            'Cámaras de espuma sin obstrucciones',
+            'Válvulas de control funcionales',
+            'Manómetros en zona correcta',
+            'Ausencia de fugas en sistema',
+            'Mangueras en buen estado',
+            'Drenajes operativos',
+            'Etiquetas de identificación legibles',
+            'Fecha de caducidad de espumógeno vigente',
+            'Sistema de dosificación preciso',
+            'Prueba de descarga satisfactoria',
+            'Ausencia de contaminación en tanque',
+            'Filtros limpios',
+            'Válvulas de alivio operativas',
+            'Señalización adecuada',
+            'Registro de recargas actualizado'
+        ]
+    },
+    'puertas-rf': {
+        name: 'Puertas Resistentes al Fuego',
+        icon: '🚪',
+        checklist: [
+            'Cierre automático funcional',
+            'Ausencia de obstáculos en recorrido',
+            'Juntas intumescentes en buen estado',
+            'Cerradura y pestillos operativos',
+            'Bisagras sin holguras',
+            'Señalización visible',
+            'Ausencia de daños en hoja',
+            'Marco sin deformaciones',
+            'Retenedor electromagnético funcional',
+            'Etiqueta de certificación presente'
+        ]
+    }
+};
+
+// ===== State Management =====
+let currentEquipmentType = null;
+let inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+let currentInspection = null;
+
+// ===== DOM Elements =====
+const screens = {
+    welcome: document.getElementById('welcomeScreen'),
+    inspection: document.getElementById('inspectionScreen'),
+    history: document.getElementById('historyScreen')
+};
+
+// ===== Utility Functions =====
+function showScreen(screenName) {
+    Object.values(screens).forEach(screen => screen.classList.remove('active'));
+    screens[screenName].classList.add('active');
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <span class="icon">${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span>
+        <span>${message}</span>
+    `;
+
+    document.getElementById('toastContainer').appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+function formatDate(date) {
+    return new Date(date).toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+}
+
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// ===== Equipment Selection =====
+document.querySelectorAll('.equipment-card').forEach(card => {
+    card.addEventListener('click', () => {
+        const type = card.dataset.type;
+        startInspection(type);
+    });
+});
+
+function startInspection(type) {
+    currentEquipmentType = type;
+    const equipment = equipmentTypes[type];
+
+    document.getElementById('equipmentTitle').textContent = `Inspección: ${equipment.name}`;
+    document.getElementById('equipmentSubtitle').textContent = `${equipment.checklist.length} puntos de verificación`;
+
+    // Set current date
+    document.getElementById('inspectionDate').valueAsDate = new Date();
+
+    // Generate checklist
+    generateChecklist(equipment.checklist);
+
+    // Reset form
+    resetInspectionForm();
+
+    showScreen('inspection');
+    updateProgress();
+}
+
+function generateChecklist(items) {
+    const container = document.getElementById('checklistContainer');
+    container.innerHTML = '';
+
+    items.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'checklist-item';
+        div.innerHTML = `
+            <input type="checkbox" id="check-${index}" data-index="${index}">
+            <label for="check-${index}">${item}</label>
+            <select class="status-select" data-index="${index}">
+                <option value="">Sin revisar</option>
+                <option value="ok">✓ Conforme</option>
+                <option value="warning">⚠ Observación</option>
+                <option value="error">✗ No conforme</option>
+            </select>
+        `;
+        container.appendChild(div);
+    });
+
+    // Add event listeners
+    container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', updateProgress);
+    });
+
+    container.querySelectorAll('.status-select').forEach(select => {
+        select.addEventListener('change', updateProgress);
+    });
+}
+
+function resetInspectionForm() {
+    // Pre-fill with AppSheet data if available
+    document.getElementById('equipmentId').value = appSheetData.equipmentId || '';
+    document.getElementById('location').value = appSheetData.equipmentLocation || appSheetData.workCenterAddress || '';
+    document.getElementById('technician').value = appSheetData.technicianName || '';
+    document.getElementById('observations').value = '';
+    document.getElementById('recommendations').value = '';
+    currentInspection = null;
+}
+
+function updateProgress() {
+    const checkboxes = document.querySelectorAll('#checklistContainer input[type="checkbox"]');
+    const checked = document.querySelectorAll('#checklistContainer input[type="checkbox"]:checked').length;
+    const percentage = Math.round((checked / checkboxes.length) * 100);
+
+    document.getElementById('progressText').textContent = `${percentage}%`;
+}
+
+// ===== Form Submission =====
+document.getElementById('submitBtn').addEventListener('click', () => {
+    if (validateForm()) {
+        saveInspection('completed');
+
+        // If in AppSheet mode and has return URL, send data back
+        if (appSheetData.appsheetMode && appSheetData.returnUrl && currentInspection) {
+            showToast('Enviando datos a AppSheet...', 'info');
+            setTimeout(() => {
+                sendDataToAppSheet(currentInspection);
+            }, 1500);
+        } else {
+            showModal();
+        }
+    }
+});
+
+document.getElementById('saveDraftBtn').addEventListener('click', () => {
+    if (validateBasicInfo()) {
+        saveInspection('draft');
+        showToast('Borrador guardado correctamente', 'success');
+        showScreen('welcome');
+    }
+});
+
+function validateBasicInfo() {
+    const equipmentId = document.getElementById('equipmentId').value;
+    const location = document.getElementById('location').value;
+    const technician = document.getElementById('technician').value;
+
+    if (!equipmentId || !location || !technician) {
+        showToast('Por favor, completa la información básica del equipo', 'error');
+        return false;
+    }
+
+    return true;
+}
+
+function validateForm() {
+    if (!validateBasicInfo()) return false;
+
+    const inspectionDate = document.getElementById('inspectionDate').value;
+    if (!inspectionDate) {
+        showToast('Por favor, selecciona la fecha de inspección', 'error');
+        return false;
+    }
+
+    const checkboxes = document.querySelectorAll('#checklistContainer input[type="checkbox"]');
+    const checked = document.querySelectorAll('#checklistContainer input[type="checkbox"]:checked').length;
+
+    if (checked === 0) {
+        showToast('Por favor, marca al menos un punto de verificación', 'error');
+        return false;
+    }
+
+    return true;
+}
+
+function saveInspection(status) {
+    const checklistItems = [];
+    const equipment = equipmentTypes[currentEquipmentType];
+
+    document.querySelectorAll('#checklistContainer .checklist-item').forEach((item, index) => {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        const select = item.querySelector('.status-select');
+
+        checklistItems.push({
+            item: equipment.checklist[index],
+            checked: checkbox.checked,
+            status: select.value
+        });
+    });
+
+    const inspection = {
+        id: currentInspection?.id || generateId(),
+        equipmentType: currentEquipmentType,
+        equipmentName: equipment.name,
+        equipmentId: document.getElementById('equipmentId').value,
+        location: document.getElementById('location').value,
+        inspectionDate: document.getElementById('inspectionDate').value,
+        technician: document.getElementById('technician').value,
+        checklist: checklistItems,
+        observations: document.getElementById('observations').value,
+        recommendations: document.getElementById('recommendations').value,
+        status: status,
+        createdAt: currentInspection?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+
+        // AppSheet integration data
+        clientId: appSheetData.clientId,
+        clientName: appSheetData.clientName,
+        clientAddress: appSheetData.clientAddress,
+        clientPhone: appSheetData.clientPhone,
+        workCenterId: appSheetData.workCenterId,
+        workCenterName: appSheetData.workCenterName,
+        workCenterAddress: appSheetData.workCenterAddress,
+        technicianId: appSheetData.technicianId
+    };
+
+    // Update or add inspection
+    const existingIndex = inspections.findIndex(i => i.id === inspection.id);
+    if (existingIndex >= 0) {
+        inspections[existingIndex] = inspection;
+    } else {
+        inspections.push(inspection);
+    }
+
+    localStorage.setItem('inspections', JSON.stringify(inspections));
+    currentInspection = inspection;
+}
+
+// ===== Modal & Report Generation =====
+function showModal() {
+    const modal = document.getElementById('reportModal');
+    const reportContent = document.getElementById('reportContent');
+
+    reportContent.innerHTML = generateReportHTML();
+    modal.classList.add('active');
+}
+
+document.querySelector('.modal-close').addEventListener('click', () => {
+    document.getElementById('reportModal').classList.remove('active');
+    showScreen('welcome');
+});
+
+document.getElementById('closeModalBtn').addEventListener('click', () => {
+    document.getElementById('reportModal').classList.remove('active');
+    showScreen('welcome');
+});
+
+function generateReportHTML() {
+    const inspection = currentInspection;
+    const equipment = equipmentTypes[inspection.equipmentType];
+
+    const conformeCount = inspection.checklist.filter(i => i.status === 'ok').length;
+    const warningCount = inspection.checklist.filter(i => i.status === 'warning').length;
+    const errorCount = inspection.checklist.filter(i => i.status === 'error').length;
+
+    return `
+        <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+            <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #ff6b35, #004e89); color: white; border-radius: 10px;">
+                <h1 style="margin: 0; font-size: 24px;">INFORME DE INSPECCIÓN</h1>
+                <p style="margin: 10px 0 0 0; font-size: 18px;">${equipment.name}</p>
+            </div>
+            
+            ${inspection.clientName ? `
+            <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+                <h3 style="margin: 0 0 10px 0; color: #333;">Información del Cliente</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold; width: 40%;">Cliente:</td>
+                        <td style="padding: 8px;">${inspection.clientName}</td>
+                    </tr>
+                    ${inspection.clientAddress ? `
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Dirección:</td>
+                        <td style="padding: 8px;">${inspection.clientAddress}</td>
+                    </tr>
+                    ` : ''}
+                    ${inspection.clientPhone ? `
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Teléfono:</td>
+                        <td style="padding: 8px;">${inspection.clientPhone}</td>
+                    </tr>
+                    ` : ''}
+                    ${inspection.workCenterName ? `
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Centro de Trabajo:</td>
+                        <td style="padding: 8px;">${inspection.workCenterName}</td>
+                    </tr>
+                    ` : ''}
+                    ${inspection.workCenterAddress ? `
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Dirección del Centro:</td>
+                        <td style="padding: 8px;">${inspection.workCenterAddress}</td>
+                    </tr>
+                    ` : ''}
+                </table>
+            </div>
+            ` : ''}
+            
+            <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                <h3 style="margin: 0 0 10px 0; color: #333;">Información del Equipo</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold; width: 40%;">ID del Equipo:</td>
+                        <td style="padding: 8px;">${inspection.equipmentId}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Ubicación:</td>
+                        <td style="padding: 8px;">${inspection.location}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Fecha de Inspección:</td>
+                        <td style="padding: 8px;">${formatDate(inspection.inspectionDate)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; font-weight: bold;">Técnico:</td>
+                        <td style="padding: 8px;">${inspection.technician}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                <h3 style="margin: 0 0 10px 0; color: #333;">Resumen de Resultados</h3>
+                <div style="display: flex; gap: 10px; justify-content: space-around;">
+                    <div style="text-align: center; padding: 10px; background: #10b981; color: white; border-radius: 8px; flex: 1;">
+                        <div style="font-size: 24px; font-weight: bold;">${conformeCount}</div>
+                        <div style="font-size: 12px;">Conforme</div>
+                    </div>
+                    <div style="text-align: center; padding: 10px; background: #f59e0b; color: white; border-radius: 8px; flex: 1;">
+                        <div style="font-size: 24px; font-weight: bold;">${warningCount}</div>
+                        <div style="font-size: 12px;">Observaciones</div>
+                    </div>
+                    <div style="text-align: center; padding: 10px; background: #ef4444; color: white; border-radius: 8px; flex: 1;">
+                        <div style="font-size: 24px; font-weight: bold;">${errorCount}</div>
+                        <div style="font-size: 12px;">No Conforme</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h3 style="margin: 0 0 10px 0; color: #333;">Lista de Verificación</h3>
+                <table style="width: 100%; border-collapse: collapse; background: white;">
+                    <thead>
+                        <tr style="background: #333; color: white;">
+                            <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Punto de Verificación</th>
+                            <th style="padding: 10px; text-align: center; border: 1px solid #ddd; width: 120px;">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${inspection.checklist.map(item => `
+                            <tr>
+                                <td style="padding: 10px; border: 1px solid #ddd;">${item.item}</td>
+                                <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                                    ${getStatusBadge(item.status)}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            
+            ${inspection.observations ? `
+                <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                    <h3 style="margin: 0 0 10px 0; color: #333;">Observaciones</h3>
+                    <p style="margin: 0; white-space: pre-wrap;">${inspection.observations}</p>
+                </div>
+            ` : ''}
+            
+            ${inspection.recommendations ? `
+                <div style="margin-bottom: 20px; padding: 15px; background: #dbeafe; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                    <h3 style="margin: 0 0 10px 0; color: #333;">Recomendaciones</h3>
+                    <p style="margin: 0; white-space: pre-wrap;">${inspection.recommendations}</p>
+                </div>
+            ` : ''}
+            
+            <div style="margin-top: 30px; padding: 15px; background: #f5f5f5; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+                <p style="margin: 0;">Informe generado el ${formatDate(new Date())}</p>
+                <p style="margin: 5px 0 0 0;">Sistema de Inspección PCI - Protección Contra Incendios</p>
+            </div>
+        </div>
+    `;
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'ok': '<span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold;">✓ Conforme</span>',
+        'warning': '<span style="background: #f59e0b; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold;">⚠ Observación</span>',
+        'error': '<span style="background: #ef4444; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold;">✗ No Conforme</span>',
+        '': '<span style="background: #9ca3af; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold;">Sin revisar</span>'
+    };
+    return badges[status] || badges[''];
+}
+
+// ===== PDF Download =====
+document.getElementById('downloadPdfBtn').addEventListener('click', () => {
+    showToast('Generando PDF...', 'info');
+
+    // In a real application, you would use a library like jsPDF or html2pdf
+    // For now, we'll create a printable version
+    const printWindow = window.open('', '', 'height=800,width=800');
+    printWindow.document.write('<html><head><title>Informe de Inspección</title>');
+    printWindow.document.write('<style>body{font-family: Arial, sans-serif; padding: 20px;}</style>');
+    printWindow.document.write('</head><body>');
+    printWindow.document.write(document.getElementById('reportContent').innerHTML);
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.print();
+
+    showToast('PDF generado correctamente', 'success');
+});
+
+// ===== History =====
+document.getElementById('historyBtn').addEventListener('click', () => {
+    loadHistory();
+    showScreen('history');
+});
+
+document.getElementById('backToMainBtn').addEventListener('click', () => {
+    showScreen('welcome');
+});
+
+function loadHistory(filter = 'all') {
+    const historyList = document.getElementById('historyList');
+    let filteredInspections = inspections;
+
+    if (filter !== 'all') {
+        filteredInspections = inspections.filter(i => i.equipmentType === filter);
+    }
+
+    if (filteredInspections.length === 0) {
+        historyList.innerHTML = `
+            <div style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
+                <div style="font-size: 4rem; margin-bottom: 20px;">📋</div>
+                <h3>No hay inspecciones registradas</h3>
+                <p>Las inspecciones completadas aparecerán aquí</p>
+            </div>
+        `;
+        return;
+    }
+
+    historyList.innerHTML = filteredInspections
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+        .map(inspection => `
+            <div class="history-item" data-id="${inspection.id}">
+                <div class="history-info">
+                    <h4>${inspection.equipmentName} - ${inspection.equipmentId}</h4>
+                    <p>📍 ${inspection.location} | 👤 ${inspection.technician} | 📅 ${formatDate(inspection.inspectionDate)}</p>
+                </div>
+                <div class="history-status status-${inspection.status}">
+                    ${inspection.status === 'completed' ? 'Completada' : 'Borrador'}
+                </div>
+            </div>
+        `).join('');
+
+    // Add click listeners
+    document.querySelectorAll('.history-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const id = item.dataset.id;
+            viewInspection(id);
+        });
+    });
+}
+
+document.getElementById('filterType').addEventListener('change', (e) => {
+    loadHistory(e.target.value);
+});
+
+function viewInspection(id) {
+    const inspection = inspections.find(i => i.id === id);
+    if (!inspection) return;
+
+    currentInspection = inspection;
+    currentEquipmentType = inspection.equipmentType;
+
+    const equipment = equipmentTypes[inspection.equipmentType];
+
+    document.getElementById('equipmentTitle').textContent = `Inspección: ${equipment.name}`;
+    document.getElementById('equipmentSubtitle').textContent = `Visualizando inspección guardada`;
+
+    // Fill form with inspection data
+    document.getElementById('equipmentId').value = inspection.equipmentId;
+    document.getElementById('location').value = inspection.location;
+    document.getElementById('inspectionDate').value = inspection.inspectionDate;
+    document.getElementById('technician').value = inspection.technician;
+    document.getElementById('observations').value = inspection.observations;
+    document.getElementById('recommendations').value = inspection.recommendations;
+
+    // Generate checklist
+    generateChecklist(equipment.checklist);
+
+    // Fill checklist with saved data
+    inspection.checklist.forEach((item, index) => {
+        const checkbox = document.querySelector(`#check-${index}`);
+        const select = document.querySelector(`.status-select[data-index="${index}"]`);
+
+        if (checkbox) checkbox.checked = item.checked;
+        if (select) select.value = item.status;
+    });
+
+    updateProgress();
+    showScreen('inspection');
+}
+
+// ===== Export to Excel =====
+document.getElementById('exportBtn').addEventListener('click', exportToExcel);
+
+function exportToExcel() {
+    if (inspections.length === 0) {
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `inspecciones_pci_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showToast('Datos exportados correctamente', 'success');
+    }
+
+    // ===== Navigation =====
+    document.getElementById('backBtn').addEventListener('click', () => {
+        if (confirm('¿Deseas salir sin guardar? Los cambios no guardados se perderán.')) {
+                        <div style="font-size: 24px; font-weight: bold;">${warningCount}</div>
+                        <div style="font-size: 12px;">Observaciones</div>
+                    </div >
+                <div style="text-align: center; padding: 10px; background: #ef4444; color: white; border-radius: 8px; flex: 1;">
+                    <div style="font-size: 24px; font-weight: bold;">${errorCount}</div>
+                    <div style="font-size: 12px;">No Conforme</div>
+                </div>
+                </div >
+            </div >
+
+                <div style="margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 10px 0; color: #333;">Lista de Verificación</h3>
+                    <table style="width: 100%; border-collapse: collapse; background: white;">
+                        <thead>
+                            <tr style="background: #333; color: white;">
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Punto de Verificación</th>
+                                <th style="padding: 10px; text-align: center; border: 1px solid #ddd; width: 120px;">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${inspection.checklist.map(item => `
+                            <tr>
+                                <td style="padding: 10px; border: 1px solid #ddd;">${item.item}</td>
+                                <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                                    ${getStatusBadge(item.status)}
+                                </td>
+                            </tr>
+                        `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            
+            ${
+                inspection.observations ? `
+                <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                    <h3 style="margin: 0 0 10px 0; color: #333;">Observaciones</h3>
+                    <p style="margin: 0; white-space: pre-wrap;">${inspection.observations}</p>
+                </div>
+            ` : ''
+            }
+            
+            ${
+                inspection.recommendations ? `
+                <div style="margin-bottom: 20px; padding: 15px; background: #dbeafe; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                    <h3 style="margin: 0 0 10px 0; color: #333;">Recomendaciones</h3>
+                    <p style="margin: 0; white-space: pre-wrap;">${inspection.recommendations}</p>
+                </div>
+            ` : ''
+            }
+
+            <div style="margin-top: 30px; padding: 15px; background: #f5f5f5; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
+                <p style="margin: 0;">Informe generado el ${formatDate(new Date())}</p>
+                <p style="margin: 5px 0 0 0;">Sistema de Inspección PCI - Protección Contra Incendios</p>
+            </div>
+        </div >
+                `;
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'ok': '<span style="background: #10b981; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold;">✓ Conforme</span>',
+        'warning': '<span style="background: #f59e0b; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold;">⚠ Observación</span>',
+        'error': '<span style="background: #ef4444; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold;">✗ No Conforme</span>',
+        '': '<span style="background: #9ca3af; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold;">Sin revisar</span>'
+    };
+    return badges[status] || badges[''];
+}
+
+// ===== PDF Download =====
+document.getElementById('downloadPdfBtn').addEventListener('click', () => {
+    showToast('Generando PDF...', 'info');
+
+    // In a real application, you would use a library like jsPDF or html2pdf
+    // For now, we'll create a printable version
+    const printWindow = window.open('', '', 'height=800,width=800');
+    printWindow.document.write('<html><head><title>Informe de Inspección</title>');
+    printWindow.document.write('<style>body{font-family: Arial, sans-serif; padding: 20px;}</style>');
+    printWindow.document.write('</head><body>');
+    printWindow.document.write(document.getElementById('reportContent').innerHTML);
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.print();
+
+    showToast('PDF generado correctamente', 'success');
+});
+
+// ===== History =====
+document.getElementById('historyBtn').addEventListener('click', () => {
+    loadHistory();
+    showScreen('history');
+});
+
+document.getElementById('backToMainBtn').addEventListener('click', () => {
+    showScreen('welcome');
+});
+
+function loadHistory(filter = 'all') {
+    const historyList = document.getElementById('historyList');
+    let filteredInspections = inspections;
+
+    if (filter !== 'all') {
+        filteredInspections = inspections.filter(i => i.equipmentType === filter);
+    }
+
+    if (filteredInspections.length === 0) {
+        historyList.innerHTML = `
+                < div style = "text-align: center; padding: 60px 20px; color: var(--text-secondary);" >
+                <div style="font-size: 4rem; margin-bottom: 20px;">📋</div>
+                <h3>No hay inspecciones registradas</h3>
+                <p>Las inspecciones completadas aparecerán aquí</p>
+            </div >
+                `;
+        return;
+    }
+
+    historyList.innerHTML = filteredInspections
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+        .map(inspection => `
+                < div class="history-item" data - id="${inspection.id}" >
+                <div class="history-info">
+                    <h4>${inspection.equipmentName} - ${inspection.equipmentId}</h4>
+                    <p>📍 ${inspection.location} | 👤 ${inspection.technician} | 📅 ${formatDate(inspection.inspectionDate)}</p>
+                </div>
+                <div class="history-status status-${inspection.status}">
+                    ${inspection.status === 'completed' ? 'Completada' : 'Borrador'}
+                </div>
+            </div >
+                `).join('');
+
+    // Add click listeners
+    document.querySelectorAll('.history-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const id = item.dataset.id;
+            viewInspection(id);
+        });
+    });
+}
+
+document.getElementById('filterType').addEventListener('change', (e) => {
+    loadHistory(e.target.value);
+});
+
+function viewInspection(id) {
+    const inspection = inspections.find(i => i.id === id);
+    if (!inspection) return;
+
+    currentInspection = inspection;
+    currentEquipmentType = inspection.equipmentType;
+
+    const equipment = equipmentTypes[inspection.equipmentType];
+
+    document.getElementById('equipmentTitle').textContent = `Inspección: ${ equipment.name } `;
+    document.getElementById('equipmentSubtitle').textContent = `Visualizando inspección guardada`;
+
+    // Fill form with inspection data
+    document.getElementById('equipmentId').value = inspection.equipmentId;
+    document.getElementById('location').value = inspection.location;
+    document.getElementById('inspectionDate').value = inspection.inspectionDate;
+    document.getElementById('technician').value = inspection.technician;
+    document.getElementById('observations').value = inspection.observations;
+    document.getElementById('recommendations').value = inspection.recommendations;
+
+    // Generate checklist
+    generateChecklist(equipment.checklist);
+
+    // Fill checklist with saved data
+    inspection.checklist.forEach((item, index) => {
+        const checkbox = document.querySelector(`#check - ${ index } `);
+        const select = document.querySelector(`.status - select[data - index="${index}"]`);
+
+        if (checkbox) checkbox.checked = item.checked;
+        if (select) select.value = item.status;
+    });
+
+    updateProgress();
+    showScreen('inspection');
+}
+
+// ===== Export to Excel =====
+document.getElementById('exportBtn').addEventListener('click', exportToExcel);
+
+function exportToExcel() {
+    if (inspections.length === 0) {
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `inspecciones_pci_${ new Date().toISOString().split('T')[0] }.csv`);
+        link.style.visibility = 'hidden';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showToast('Datos exportados correctamente', 'success');
+    }
+
+    // ===== Navigation =====
+    document.getElementById('backBtn').addEventListener('click', () => {
+        if (confirm('¿Deseas salir sin guardar? Los cambios no guardados se perderán.')) {
+            showScreen('welcome');
+        }
+    });
+
+    // ===== Initialize =====
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if coming from AppSheet with equipment type
+    if (appSheetData.appsheetMode && appSheetData.equipmentType) {
+        console.log('Iniciando desde AppSheet con tipo de equipo:', appSheetData.equipmentType);
+        
+        // Show AppSheet mode indicator
+        if (appSheetData.clientName) {
+            showToast(`Cliente: ${ appSheetData.clientName }${ appSheetData.workCenterName ? ' - ' + appSheetData.workCenterName : '' } `, 'info');
+        }
+        
+        // Auto-start inspection for the specified equipment type
+        startInspection(appSheetData.equipmentType);
+    } else {
+        showScreen('welcome');
+    }
+    
+    console.log('Sistema de Inspección PCI iniciado correctamente');
+    
+    // Log AppSheet data if available
+    if (appSheetData.appSheetMode) {
+        console.log('Modo AppSheet activado:', appSheetData);
+    }
+});
