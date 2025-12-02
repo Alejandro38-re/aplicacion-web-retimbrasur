@@ -1681,7 +1681,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ===== PHOTO CAPTURE FUNCTIONALITY =====
-    let currentPhotoData = null;
+    let currentPhotosArray = [];  // Changed from single photo to array
+    const MAX_PHOTOS = 5;
 
     // Function to compress image using Canvas API
     function compressImage(file, maxWidth = 1024, quality = 0.8) {
@@ -1757,49 +1758,100 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const photoInput = document.getElementById('equipmentPhoto');
-    const photoPreview = document.getElementById('photoPreview');
-    const photoPreviewImg = document.getElementById('photoPreviewImg');
-    const removePhotoBtn = document.getElementById('removePhoto');
+    const photosGallery = document.getElementById('photosGallery');
+    const addMorePhotosBtn = document.getElementById('addMorePhotosBtn');
 
+    // Render photos gallery
+    function renderPhotosGallery() {
+        if (!photosGallery) return;
+
+        if (currentPhotosArray.length === 0) {
+            photosGallery.style.display = 'none';
+            if (addMorePhotosBtn) addMorePhotosBtn.style.display = 'none';
+            return;
+        }
+
+        photosGallery.style.display = 'grid';
+        if (addMorePhotosBtn) {
+            addMorePhotosBtn.style.display = currentPhotosArray.length < MAX_PHOTOS ? 'inline-flex' : 'none';
+        }
+
+        photosGallery.innerHTML = currentPhotosArray.map((photoData, index) => `
+            <div class="photo-thumbnail" data-index="${index}">
+                <img src="${photoData}" alt="Foto ${index + 1}">
+                <button type="button" class="btn-remove-photo-thumb" data-index="${index}">✕</button>
+                <div class="photo-number-badge">${index + 1}/${currentPhotosArray.length}</div>
+            </div>
+        `).join('');
+
+        // Add remove listeners
+        photosGallery.querySelectorAll('.btn-remove-photo-thumb').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.dataset.index);
+                removePhoto(index);
+            });
+        });
+    }
+
+    // Remove photo at index
+    function removePhoto(index) {
+        currentPhotosArray.splice(index, 1);
+        renderPhotosGallery();
+        showToast('Foto eliminada', 'info');
+    }
+
+    // Add photo to array
+    async function addPhoto(file) {
+        if (currentPhotosArray.length >= MAX_PHOTOS) {
+            showToast(`Máximo ${MAX_PHOTOS} fotos permitidas`, 'warning');
+            return;
+        }
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            showToast('Por favor selecciona un archivo de imagen válido', 'error');
+            return;
+        }
+
+        // Show loading toast
+        showToast('Comprimiendo imagen...', 'info');
+
+        try {
+            // Compress the image
+            const compressed = await compressImage(file, 1024, 0.8);
+
+            currentPhotosArray.push(compressed.dataUrl);
+            renderPhotosGallery();
+
+            // Show success message with compression stats
+            const compressionMsg = `Imagen ${currentPhotosArray.length} agregada: ${(compressed.originalSize / 1024).toFixed(0)}KB → ${(compressed.compressedSize / 1024).toFixed(0)}KB (${compressed.compressionRatio}% reducción)`;
+            showToast(compressionMsg, 'success');
+
+            // Clear input
+            if (photoInput) photoInput.value = '';
+        } catch (error) {
+            showToast(error.message || 'Error al procesar la imagen', 'error');
+            if (photoInput) photoInput.value = '';
+        }
+    }
+
+    // Photo input event listener
     if (photoInput) {
         photoInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (file) {
-                // Validate file type
-                if (!file.type.startsWith('image/')) {
-                    showToast('Por favor selecciona un archivo de imagen válido', 'error');
-                    photoInput.value = '';
-                    return;
-                }
-
-                // Show loading toast
-                showToast('Comprimiendo imagen...', 'info');
-
-                try {
-                    // Compress the image
-                    const compressed = await compressImage(file, 1024, 0.8);
-
-                    currentPhotoData = compressed.dataUrl;
-                    photoPreviewImg.src = currentPhotoData;
-                    photoPreview.style.display = 'block';
-
-                    // Show success message with compression stats
-                    const compressionMsg = `Imagen comprimida: ${(compressed.originalSize / 1024).toFixed(0)}KB → ${(compressed.compressedSize / 1024).toFixed(0)}KB (${compressed.compressionRatio}% reducción)`;
-                    showToast(compressionMsg, 'success');
-                } catch (error) {
-                    showToast(error.message || 'Error al procesar la imagen', 'error');
-                    photoInput.value = '';
-                }
+                await addPhoto(file);
             }
         });
     }
 
-    if (removePhotoBtn) {
-        removePhotoBtn.addEventListener('click', () => {
-            currentPhotoData = null;
-            photoInput.value = '';
-            photoPreview.style.display = 'none';
-            photoPreviewImg.src = '';
+    // Add more photos button
+    if (addMorePhotosBtn) {
+        addMorePhotosBtn.addEventListener('click', () => {
+            if (photoInput) {
+                photoInput.click();
+            }
         });
     }
 
@@ -1899,26 +1951,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ===== INTEGRATE PHOTO WITH SAVE INSPECTION =====
+    // ===== INTEGRATE PHOTOS WITH SAVE INSPECTION =====
     const originalSaveInspection = window.saveInspection;
     window.saveInspection = function (status = 'draft') {
         // Call original function
         const result = originalSaveInspection.call(this, status);
 
-        // Add photo to the last saved inspection if available
-        if (currentPhotoData && inspections.length > 0) {
+        // Add photos to the last saved inspection if available
+        if (currentPhotosArray.length > 0 && inspections.length > 0) {
             const lastInspection = inspections[inspections.length - 1];
-            lastInspection.photo = currentPhotoData;
+            lastInspection.photos = [...currentPhotosArray];
+            // Keep first photo as legacy 'photo' for backward compatibility
+            lastInspection.photo = currentPhotosArray[0];
             localStorage.setItem('inspections', JSON.stringify(inspections));
         }
 
-        // Add photo to equipment if saving to center
+        // Add photos to equipment if saving to center
         const saveEquipmentCheck = document.getElementById('saveEquipmentCheck');
-        if (currentPhotoData && saveEquipmentCheck && saveEquipmentCheck.checked && currentWorkCenter) {
+        if (currentPhotosArray.length > 0 && saveEquipmentCheck && saveEquipmentCheck.checked && currentWorkCenter) {
             const equipmentId = document.getElementById('equipmentId').value;
             const equipment = getEquipmentById(currentWorkCenter.id, equipmentId);
             if (equipment) {
-                equipment.photo = currentPhotoData;
+                equipment.photos = [...currentPhotosArray];
+                // Keep first photo as legacy 'photo' for backward compatibility
+                equipment.photo = currentPhotosArray[0];
                 saveWorkCenter(currentWorkCenter);
             }
         }
@@ -2049,8 +2105,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 .filter(i => i.equipmentId === eq.id && i.workCenterId === centerId)
                 .sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0];
 
-            // Get photo from equipment or last inspection
-            const photoUrl = eq.photo || (lastInspection && lastInspection.photo) || null;
+            // Get photos from equipment or last inspection
+            const photos = eq.photos || (lastInspection && lastInspection.photos) || (eq.photo ? [eq.photo] : (lastInspection && lastInspection.photo ? [lastInspection.photo] : []));
+            const photoUrl = photos.length > 0 ? photos[0] : null;
+            const photoCount = photos.length;
 
             return `
                 <div class="equipment-card saved-equipment" data-equipment-id="${eq.id}" data-type="${eq.type}">
@@ -2059,11 +2117,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${photoUrl ? `
                         <div class="equipment-photo-preview">
                             <img src="${photoUrl}" alt="Foto del equipo">
+                            ${photoCount > 1 ? `<div class="photo-count-badge">📷 ${photoCount}</div>` : ''}
                         </div>
                     ` : `
                         <div class="equipment-photo-placeholder">
                             <span class="placeholder-icon">📷</span>
-                            <span class="placeholder-text">Sin foto</span>
+                            <span class="placeholder-text">Sin fotos</span>
                         </div>
                     `}
 
@@ -2213,7 +2272,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Make function globally available
     window.generateCenterReport = generateCenterReport;
 
-    // ===== RESET INSPECTION FORM TO CLEAR PHOTO =====
+    // ===== RESET INSPECTION FORM TO CLEAR PHOTOS =====
     const originalResetInspectionForm = window.resetInspectionForm;
     window.resetInspectionForm = function () {
         // Call original function
@@ -2221,25 +2280,31 @@ document.addEventListener('DOMContentLoaded', () => {
             originalResetInspectionForm.call(this);
         }
 
-        // Reset photo
-        currentPhotoData = null;
+        // Reset photos array
+        currentPhotosArray = [];
         if (photoInput) photoInput.value = '';
-        if (photoPreview) photoPreview.style.display = 'none';
-        if (photoPreviewImg) photoPreviewImg.src = '';
+        renderPhotosGallery();
     };
 
-    // ===== START INSPECTION WITH EQUIPMENT TO LOAD PHOTO =====
+    // ===== START INSPECTION WITH EQUIPMENT TO LOAD PHOTOS =====
     const originalStartInspectionWithEquipment = window.startInspectionWithEquipment;
     window.startInspectionWithEquipment = function (equipmentId, type) {
         // Call original function
         originalStartInspectionWithEquipment.call(this, equipmentId, type);
 
-        // Load photo if available
+        // Load photos if available
         const equipment = getEquipmentById(currentWorkCenter.id, equipmentId);
-        if (equipment && equipment.photo) {
-            currentPhotoData = equipment.photo;
-            if (photoPreviewImg) photoPreviewImg.src = currentPhotoData;
-            if (photoPreview) photoPreview.style.display = 'block';
+        if (equipment) {
+            // Use photos array if available, otherwise migrate from single photo
+            if (equipment.photos && Array.isArray(equipment.photos)) {
+                currentPhotosArray = [...equipment.photos];
+            } else if (equipment.photo) {
+                // Migrate single photo to array
+                currentPhotosArray = [equipment.photo];
+            } else {
+                currentPhotosArray = [];
+            }
+            renderPhotosGallery();
         }
 
         // Update button visibility
@@ -2247,4 +2312,266 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     console.log('Multi-equipment workflow and photo integration initialized');
+
+    // ===== STATISTICS SCREEN =====
+    const viewStatisticsBtn = document.getElementById('viewStatisticsBtn');
+    const backFromStatsBtn = document.getElementById('backFromStatsBtn');
+
+    if (viewStatisticsBtn) {
+        viewStatisticsBtn.addEventListener('click', () => {
+            if (currentWorkCenter) {
+                generateStatistics(currentWorkCenter.id);
+                showScreen('statisticsScreen');
+            }
+        });
+    }
+
+    if (backFromStatsBtn) {
+        backFromStatsBtn.addEventListener('click', () => {
+            showScreen('welcome');
+        });
+    }
+
+    // Update screens object to include statistics
+    screens.statisticsScreen = document.getElementById('statisticsScreen');
+
+    // Generate statistics for a work center
+    function generateStatistics(centerId) {
+        const center = getWorkCenter(centerId);
+        const equipment = getEquipmentByCenter(centerId);
+        const centerInspections = inspections.filter(i => i.workCenterId === centerId && i.status === 'completed');
+
+        // Update subtitle
+        document.getElementById('statsSubtitle').textContent = center ? center.name : 'Análisis y métricas';
+
+        // Calculate statistics
+        const totalEquipment = equipment.length;
+        const totalInspections = centerInspections.length;
+
+        // Equipment with at least one inspection
+        const inspectedEquipmentIds = new Set(centerInspections.map(i => i.equipmentId));
+        const pendingEquipment = equipment.filter(eq => !inspectedEquipmentIds.has(eq.id));
+        const pendingCount = pendingEquipment.length;
+
+        // Last inspection date
+        const lastInspection = centerInspections.length > 0
+            ? centerInspections.sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0]
+            : null;
+        const lastInspectionDate = lastInspection
+            ? new Date(lastInspection.inspectionDate).toLocaleDateString('es-ES')
+            : '-';
+
+        // Update summary cards
+        document.getElementById('totalEquipmentCount').textContent = totalEquipment;
+        document.getElementById('totalInspectionsCount').textContent = totalInspections;
+        document.getElementById('pendingEquipmentCount').textContent = pendingCount;
+        document.getElementById('lastInspectionDate').textContent = lastInspectionDate;
+
+        // Equipment by type chart
+        const equipmentByType = {};
+        equipment.forEach(eq => {
+            const typeName = equipmentTypes[eq.type] ? equipmentTypes[eq.type].name : eq.type;
+            equipmentByType[typeName] = (equipmentByType[typeName] || 0) + 1;
+        });
+
+        renderEquipmentTypeChart(equipmentByType);
+
+        // Inspection status chart
+        const inspectionStatusData = {
+            'Con Inspección': totalEquipment - pendingCount,
+            'Sin Inspección': pendingCount
+        };
+
+        renderInspectionStatusChart(inspectionStatusData);
+
+        // Pending equipment list
+        renderPendingEquipmentList(pendingEquipment);
+    }
+
+    // Render equipment type chart
+    let equipmentTypeChartInstance = null;
+    function renderEquipmentTypeChart(data) {
+        const ctx = document.getElementById('equipmentTypeChart');
+        if (!ctx) return;
+
+        // Destroy previous chart if exists
+        if (equipmentTypeChartInstance) {
+            equipmentTypeChartInstance.destroy();
+        }
+
+        const labels = Object.keys(data);
+        const values = Object.values(data);
+
+        const colors = [
+            'rgba(255, 107, 53, 0.8)',
+            'rgba(0, 78, 137, 0.8)',
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(245, 158, 11, 0.8)',
+            'rgba(139, 92, 246, 0.8)',
+            'rgba(236, 72, 153, 0.8)',
+            'rgba(59, 130, 246, 0.8)',
+            'rgba(34, 197, 94, 0.8)',
+            'rgba(251, 146, 60, 0.8)',
+            'rgba(168, 85, 247, 0.8)'
+        ];
+
+        equipmentTypeChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#f8fafc',
+                            font: {
+                                size: 12
+                            },
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${label}: ${value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Render inspection status chart
+    let inspectionStatusChartInstance = null;
+    function renderInspectionStatusChart(data) {
+        const ctx = document.getElementById('inspectionStatusChart');
+        if (!ctx) return;
+
+        // Destroy previous chart if exists
+        if (inspectionStatusChartInstance) {
+            inspectionStatusChartInstance.destroy();
+        }
+
+        const labels = Object.keys(data);
+        const values = Object.values(data);
+
+        inspectionStatusChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Cantidad',
+                    data: values,
+                    backgroundColor: [
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)'
+                    ],
+                    borderColor: [
+                        'rgba(16, 185, 129, 1)',
+                        'rgba(245, 158, 11, 1)'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Equipos: ${context.parsed.y}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#94a3b8',
+                            stepSize: 1
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#94a3b8'
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Render pending equipment list
+    function renderPendingEquipmentList(pendingEquipment) {
+        const container = document.getElementById('pendingEquipmentList');
+        if (!container) return;
+
+        if (pendingEquipment.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">✓</div>
+                    <h4>¡Excelente!</h4>
+                    <p>Todos los equipos han sido inspeccionados</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = pendingEquipment.map(eq => {
+            const typeInfo = equipmentTypes[eq.type];
+            return `
+                <div class="pending-item">
+                    <div class="pending-item-info">
+                        <strong>${typeInfo ? typeInfo.icon : '🔧'} ${typeInfo ? typeInfo.name : eq.type} - ${eq.id}</strong>
+                        <p>📍 ${eq.location || 'Ubicación no especificada'}</p>
+                    </div>
+                    <div class="pending-badge">Sin inspeccionar</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Update loadEquipmentList to show/hide statistics button
+    const originalLoadEquipmentListForStats = window.loadEquipmentList;
+    window.loadEquipmentList = function(centerId) {
+        // Call original function
+        if (originalLoadEquipmentListForStats) {
+            originalLoadEquipmentListForStats.call(this, centerId);
+        }
+
+        // Show/hide statistics button
+        const statsBtn = document.getElementById('viewStatisticsBtn');
+        const equipment = getEquipmentByCenter(centerId);
+        if (statsBtn) {
+            statsBtn.style.display = equipment.length > 0 ? 'inline-flex' : 'none';
+        }
+    };
+
+    console.log('Statistics functionality initialized');
 });

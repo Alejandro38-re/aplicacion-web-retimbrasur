@@ -127,10 +127,14 @@
                 </div>
 
                 <!-- Action Buttons -->
-                <div style="display: flex; gap: 1rem; margin-top: 30px; justify-content: center;">
+                <div style="display: flex; gap: 1rem; margin-top: 30px; justify-content: center; flex-wrap: wrap;">
                     <button id="newEquipmentBtn" class="btn btn-primary">
                         <span class="icon">➕</span>
                         Nuevo Equipo
+                    </button>
+                    <button id="viewStatisticsBtn" class="btn btn-secondary" style="display: none;">
+                        <span class="icon">📊</span>
+                        Ver Estadísticas
                     </button>
                     <button id="generateCenterReportBtn" class="btn btn-secondary" style="display: none;">
                         <span class="icon">📄</span>
@@ -170,13 +174,19 @@
                             <input type="text" id="location" required placeholder="Ej: Planta 1, Pasillo A">
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1;">
-                            <label for="equipmentPhoto">📸 Foto del Equipo</label>
+                            <label for="equipmentPhoto">📸 Fotos del Equipo <span style="color: var(--text-secondary); font-size: 0.85rem;">(Máximo 5)</span></label>
                             <input type="file" id="equipmentPhoto" accept="image/*" capture="environment"
                                 class="photo-input">
-                            <div id="photoPreview" class="photo-preview" style="display: none;">
-                                <img id="photoPreviewImg" src="" alt="Vista previa">
-                                <button type="button" id="removePhoto" class="btn-remove-photo">✕</button>
+
+                            <!-- Photos Gallery -->
+                            <div id="photosGallery" class="photos-gallery" style="display: none;">
+                                <!-- Photo thumbnails will be dynamically generated -->
                             </div>
+
+                            <button type="button" id="addMorePhotosBtn" class="btn btn-secondary btn-sm" style="display: none; margin-top: 10px;">
+                                <span class="icon">➕</span>
+                                Agregar Otra Foto
+                            </button>
                         </div>
                         <div class="form-group">
                             <label for="inspectionDate">Fecha de Inspección *</label>
@@ -254,6 +264,78 @@
                             <span class="icon">✓</span>
                             Terminar
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Screen -->
+        <div id="statisticsScreen" class="screen">
+            <div class="statistics-container">
+                <div class="statistics-header">
+                    <button id="backFromStatsBtn" class="btn btn-ghost">
+                        <span class="icon">←</span>
+                        Volver
+                    </button>
+                    <div>
+                        <h2>📊 Estadísticas del Centro</h2>
+                        <p id="statsSubtitle">Análisis y métricas</p>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="stats-cards-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">🔧</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="totalEquipmentCount">0</div>
+                            <div class="stat-label">Total Equipos</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">✓</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="totalInspectionsCount">0</div>
+                            <div class="stat-label">Inspecciones Completadas</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="pendingEquipmentCount">0</div>
+                            <div class="stat-label">Equipos Pendientes</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📅</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="lastInspectionDate">-</div>
+                            <div class="stat-label">Última Inspección</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>Equipos por Tipo</h3>
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="equipmentTypeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Estado de Inspecciones</h3>
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="inspectionStatusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pending Equipment List -->
+                <div class="pending-equipment-section">
+                    <h3>Equipos Sin Inspeccionar</h3>
+                    <div id="pendingEquipmentList" class="pending-list">
+                        <!-- Pending items will be dynamically generated -->
                     </div>
                 </div>
             </div>
