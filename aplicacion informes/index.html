@@ -100,6 +100,27 @@
                     <p>Selecciona un equipo existente o crea uno nuevo</p>
                 </div>
 
+                <!-- Search and Filter Bar -->
+                <div class="search-filter-container">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="equipmentSearchInput" placeholder="Buscar por ID, ubicación o fabricante..." class="search-input">
+                    </div>
+                    <select id="equipmentTypeFilter" class="filter-select">
+                        <option value="all">Todos los tipos</option>
+                        <option value="extintores">🧯 Extintores</option>
+                        <option value="bies">🚰 BIEs</option>
+                        <option value="grupos-presion">⚙️ Grupos de Presión</option>
+                        <option value="hidrantes">🚿 Hidrantes</option>
+                        <option value="gas">💨 Extinción por Gas</option>
+                        <option value="sprinklers">💧 Sprinklers</option>
+                        <option value="agua-pulverizada">🌊 Agua Pulverizada</option>
+                        <option value="deteccion">🔔 Detección</option>
+                        <option value="espuma">🧼 Sistemas Espuma</option>
+                        <option value="puertas-rf">🚪 Puertas RF</option>
+                    </select>
+                </div>
+
                 <!-- Equipment List Container -->
                 <div id="equipmentListContainer" class="equipment-list">
                     <!-- Equipment cards will be dynamically generated -->
