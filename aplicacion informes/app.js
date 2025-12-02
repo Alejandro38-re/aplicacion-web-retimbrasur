@@ -409,6 +409,92 @@ let currentEquipmentType = null;
 let inspections = JSON.parse(localStorage.getItem('inspections')) || [];
 let currentInspection = null;
 
+// ===== INSPECTION REMINDER SYSTEM =====
+// Periodicidad de inspecciones por tipo de equipo (en meses)
+const inspectionPeriodicity = {
+    'extintores': 12,           // Anual
+    'bies': 12,                 // Anual
+    'grupos-presion': 12,       // Anual
+    'hidrantes': 12,            // Anual
+    'gas': 12,                  // Anual
+    'sprinklers': 12,           // Anual
+    'agua-pulverizada': 12,     // Anual
+    'deteccion': 12,            // Anual
+    'espuma': 12,               // Anual
+    'puertas-rf': 12            // Anual
+};
+
+// Calculate next inspection date
+function calculateNextInspection(lastDate, equipmentType) {
+    if (!lastDate) return null;
+
+    const months = inspectionPeriodicity[equipmentType] || 12;
+    const nextDate = new Date(lastDate);
+    nextDate.setMonth(nextDate.getMonth() + months);
+
+    return nextDate;
+}
+
+// Get inspection status based on next inspection date
+// Returns: 'ok' (green), 'warning' (yellow), 'overdue' (red)
+function getInspectionStatus(nextInspectionDate) {
+    if (!nextInspectionDate) return 'unknown';
+
+    const today = new Date();
+    const next = new Date(nextInspectionDate);
+    const diffTime = next - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+        return 'overdue';  // Vencido (rojo)
+    } else if (diffDays <= 30) {
+        return 'warning';  // Próximo a vencer (amarillo)
+    } else {
+        return 'ok';       // Al día (verde)
+    }
+}
+
+// Get days until/since inspection
+function getDaysUntilInspection(nextInspectionDate) {
+    if (!nextInspectionDate) return null;
+
+    const today = new Date();
+    const next = new Date(nextInspectionDate);
+    const diffTime = next - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return diffDays;
+}
+
+// Get status badge HTML for equipment card
+function getInspectionStatusBadge(status, daysUntil) {
+    const badges = {
+        'ok': {
+            class: 'inspection-badge-ok',
+            icon: '✓',
+            text: 'Al día'
+        },
+        'warning': {
+            class: 'inspection-badge-warning',
+            icon: '⚠️',
+            text: daysUntil > 0 ? `${daysUntil} días` : 'Próximo'
+        },
+        'overdue': {
+            class: 'inspection-badge-overdue',
+            icon: '✗',
+            text: daysUntil < 0 ? `Vencido ${Math.abs(daysUntil)}d` : 'Vencido'
+        },
+        'unknown': {
+            class: 'inspection-badge-unknown',
+            icon: '?',
+            text: 'Sin datos'
+        }
+    };
+
+    const badge = badges[status] || badges['unknown'];
+    return `<span class="${badge.class}">${badge.icon} ${badge.text}</span>`;
+}
+
 // ===== DOM Elements =====
 // ===== DOM Elements =====
 let screens = {};
@@ -779,9 +865,15 @@ function generateReportHTML() {
 
     return `
         <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
-            <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #ff6b35, #004e89); color: white; border-radius: 10px;">
-                <h1 style="margin: 0; font-size: 24px;">INFORME DE INSPECCIÓN</h1>
-                <p style="margin: 10px 0 0 0; font-size: 18px;">${equipment.name}</p>
+            <!-- Header with Logo -->
+            <div style="text-align: center; margin-bottom: 30px; padding: 30px 20px; background: linear-gradient(135deg, #ff6b35, #004e89); color: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                <div style="margin-bottom: 15px;">
+                    <div style="background: white; width: 120px; height: 60px; margin: 0 auto; border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+                        <span style="color: #ff6b35; font-size: 20px; font-weight: 800;">RETIMBRASUR</span>
+                    </div>
+                </div>
+                <h1 style="margin: 15px 0 0 0; font-size: 26px; font-weight: 800; letter-spacing: 1px;">INFORME DE INSPECCIÓN</h1>
+                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.95;">${equipment.name}</p>
             </div>
             
             ${inspection.clientName ? `
@@ -977,24 +1069,71 @@ function generateReportHTML() {
                     </tbody>
                 </table>
             </div>
-            
+
+            ${inspection.photos && inspection.photos.length > 0 ? `
+                <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h3 style="margin: 0 0 15px 0; color: #333;">📸 Fotografías del Equipo (${inspection.photos.length})</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+                        ${inspection.photos.map((photo, index) => `
+                            <div style="position: relative; border: 2px solid #ddd; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                <img src="${photo}" style="width: 100%; height: auto; display: block;" alt="Foto ${index + 1}">
+                                <div style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                                    ${index + 1}/${inspection.photos.length}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : (inspection.photo ? `
+                <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h3 style="margin: 0 0 15px 0; color: #333;">📸 Fotografía del Equipo</h3>
+                    <div style="text-align: center;">
+                        <img src="${inspection.photo}" style="max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Foto del equipo">
+                    </div>
+                </div>
+            ` : '')}
+
             ${inspection.observations ? `
                 <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #f59e0b;">
                     <h3 style="margin: 0 0 10px 0; color: #333;">Observaciones</h3>
                     <p style="margin: 0; white-space: pre-wrap;">${inspection.observations}</p>
                 </div>
             ` : ''}
-            
+
             ${inspection.recommendations ? `
                 <div style="margin-bottom: 20px; padding: 15px; background: #dbeafe; border-radius: 8px; border-left: 4px solid #3b82f6;">
                     <h3 style="margin: 0 0 10px 0; color: #333;">Recomendaciones</h3>
                     <p style="margin: 0; white-space: pre-wrap;">${inspection.recommendations}</p>
                 </div>
             ` : ''}
-            
-            <div style="margin-top: 30px; padding: 15px; background: #f5f5f5; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
-                <p style="margin: 0;">Informe generado el ${formatDate(new Date())}</p>
-                <p style="margin: 5px 0 0 0;">Sistema de Inspección PCI - Protección Contra Incendios</p>
+
+            <!-- Professional Footer -->
+            <div style="margin-top: 40px; padding: 25px; background: linear-gradient(135deg, #1e293b, #334155); color: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0 0 5px 0; font-size: 18px; color: #ff6b35;">RETIMBRASUR</h3>
+                    <p style="margin: 0; font-size: 13px; opacity: 0.9;">Protección Contra Incendios - Inspección y Mantenimiento</p>
+                </div>
+                <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 12px;">
+                    <div>
+                        <strong style="display: block; margin-bottom: 5px; color: #ff6b35;">📞 Contacto</strong>
+                        <p style="margin: 0; opacity: 0.9;">Tel: +34 XXX XXX XXX</p>
+                        <p style="margin: 3px 0 0 0; opacity: 0.9;">Email: info@retimbrasur.es</p>
+                    </div>
+                    <div>
+                        <strong style="display: block; margin-bottom: 5px; color: #ff6b35;">📍 Dirección</strong>
+                        <p style="margin: 0; opacity: 0.9;">Calle Ejemplo, 123</p>
+                        <p style="margin: 3px 0 0 0; opacity: 0.9;">28001 Madrid, España</p>
+                    </div>
+                    <div>
+                        <strong style="display: block; margin-bottom: 5px; color: #ff6b35;">📄 Documento</strong>
+                        <p style="margin: 0; opacity: 0.9;">Fecha: ${formatDate(new Date())}</p>
+                        <p style="margin: 3px 0 0 0; opacity: 0.9;">Sistema v1.0</p>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); font-size: 11px; opacity: 0.8;">
+                    <p style="margin: 0;">Este documento es confidencial y está destinado exclusivamente al cliente indicado.</p>
+                    <p style="margin: 5px 0 0 0;">© ${new Date().getFullYear()} RETIMBRASUR - Todos los derechos reservados</p>
+                </div>
             </div>
         </div>
     `;
@@ -2110,6 +2249,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const photoUrl = photos.length > 0 ? photos[0] : null;
             const photoCount = photos.length;
 
+            // Calculate inspection reminder status
+            let reminderBadge = '';
+            if (lastInspection && lastInspection.inspectionDate) {
+                const nextInspectionDate = calculateNextInspection(lastInspection.inspectionDate, eq.type);
+                if (nextInspectionDate) {
+                    const status = getInspectionStatus(nextInspectionDate);
+                    const daysUntil = getDaysUntilInspection(nextInspectionDate);
+                    reminderBadge = getInspectionStatusBadge(status, daysUntil);
+                }
+            }
+
             return `
                 <div class="equipment-card saved-equipment" data-equipment-id="${eq.id}" data-type="${eq.type}">
                     <button class="btn-delete-equipment" data-equipment-id="${eq.id}">✕</button>
@@ -2135,9 +2285,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${lastInspection ? `
                             <div class="last-inspection">
                                 <p><strong>Última inspección:</strong> ${new Date(lastInspection.inspectionDate).toLocaleDateString()}</p>
-                                <p><strong>Estado:</strong> <span class="status-${lastInspection.status}">${lastInspection.status === 'completed' ? 'Completada' : 'Borrador'}</span></p>
+                                ${reminderBadge ? `<p style="margin-top: 8px;">${reminderBadge}</p>` : ''}
                             </div>
-                        ` : ''}
+                        ` : `<p style="margin-top: 10px;">${getInspectionStatusBadge('unknown', null)}</p>`}
                     </div>
                     <button class="btn btn-primary btn-sm inspect-equipment-btn" data-equipment-id="${eq.id}">
                         Inspeccionar
