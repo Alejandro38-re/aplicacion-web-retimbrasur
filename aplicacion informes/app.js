@@ -3397,3 +3397,692 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('AppSheet synchronization module initialized');
     console.log('Configure APPSHEET_CONFIG in app.js to enable synchronization');
 });
+
+// ===== Templates Module (Copy from previous inspections) =====
+document.addEventListener('DOMContentLoaded', () => {
+    let templateSelect = null;
+
+    // Populate template selector with previous inspections
+    function populateTemplateSelector() {
+        templateSelect = document.getElementById('templateSelect');
+        if (!templateSelect) return;
+
+        // Get all inspections from current work center
+        const inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+        const centerInspections = inspections.filter(i => i.workCenterId === currentWorkCenter?.id);
+
+        // Clear existing options except first one
+        templateSelect.innerHTML = '<option value="">-- Nuevo equipo (vacío) --</option>';
+
+        // Group by equipment type
+        const grouped = {};
+        centerInspections.forEach(inspection => {
+            const type = inspection.equipmentType || 'otros';
+            if (!grouped[type]) grouped[type] = [];
+            grouped[type].push(inspection);
+        });
+
+        // Add options grouped by type
+        Object.keys(grouped).sort().forEach(type => {
+            const typeLabel = getEquipmentTypeLabel(type);
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = typeLabel;
+
+            grouped[type]
+                .sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))
+                .slice(0, 10) // Max 10 per type
+                .forEach(inspection => {
+                    const option = document.createElement('option');
+                    option.value = inspection.id;
+                    const date = new Date(inspection.inspectionDate).toLocaleDateString();
+                    option.textContent = `${inspection.equipmentId} - ${date} (${inspection.location})`;
+                    optgroup.appendChild(option);
+                });
+
+            templateSelect.appendChild(optgroup);
+        });
+
+        // Show count
+        const totalCount = centerInspections.length;
+        if (totalCount > 0) {
+            const infoOption = document.createElement('option');
+            infoOption.disabled = true;
+            infoOption.textContent = `─── ${totalCount} inspecciones disponibles ───`;
+            templateSelect.insertBefore(infoOption, templateSelect.children[1]);
+        }
+    }
+
+    // Get equipment type label
+    function getEquipmentTypeLabel(type) {
+        const labels = {
+            'extintores': '🧯 Extintores',
+            'bies': '🚰 BIEs',
+            'grupos-presion': '⚙️ Grupos de Presión',
+            'hidrantes': '🚿 Hidrantes',
+            'gas': '💨 Extinción por Gas',
+            'sprinklers': '💧 Sprinklers',
+            'agua-pulverizada': '🌊 Agua Pulverizada',
+            'deteccion': '🔔 Detección',
+            'espuma': '🧼 Sistemas Espuma',
+            'puertas-rf': '🚪 Puertas RF'
+        };
+        return labels[type] || '📦 Otros';
+    }
+
+    // Load template data into form
+    function loadTemplate(inspectionId) {
+        if (!inspectionId) return;
+
+        const inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+        const template = inspections.find(i => i.id === inspectionId);
+
+        if (!template) {
+            showToast('Plantilla no encontrada', 'error');
+            return;
+        }
+
+        // Pre-fill equipment data (NOT inspection-specific data)
+        document.getElementById('equipmentId').value = template.equipmentId || '';
+        document.getElementById('location').value = template.location || '';
+        document.getElementById('manufacturer').value = template.manufacturer || '';
+        document.getElementById('brand').value = template.brand || '';
+        document.getElementById('model').value = template.model || '';
+
+        if (template.manufacturingDate) {
+            document.getElementById('manufacturingDate').value = template.manufacturingDate;
+        }
+        if (template.lastRetestDate) {
+            document.getElementById('lastRetestDate').value = template.lastRetestDate;
+        }
+
+        // Pre-fill observations and recommendations as suggestions
+        const observationsField = document.getElementById('observations');
+        const recommendationsField = document.getElementById('recommendations');
+
+        if (template.observations && observationsField) {
+            observationsField.value = template.observations;
+            observationsField.placeholder = 'Editado desde plantilla - modifica si es necesario';
+        }
+        if (template.recommendations && recommendationsField) {
+            recommendationsField.value = template.recommendations;
+            recommendationsField.placeholder = 'Editado desde plantilla - modifica si es necesario';
+        }
+
+        // Show success toast
+        showToast(`✓ Plantilla cargada: ${template.equipmentId}`, 'success');
+
+        // Scroll to top of form
+        document.getElementById('inspectionScreen').scrollTop = 0;
+    }
+
+    // Template selector change event
+    function setupTemplateSelector() {
+        templateSelect = document.getElementById('templateSelect');
+        if (!templateSelect) {
+            console.warn('Template selector not found');
+            return;
+        }
+
+        templateSelect.addEventListener('change', (e) => {
+            const inspectionId = e.target.value;
+            if (inspectionId) {
+                loadTemplate(inspectionId);
+            }
+        });
+    }
+
+    // Hook into startInspection to populate templates
+    const originalStartInspectionForTemplates = window.startInspection;
+    if (originalStartInspectionForTemplates) {
+        window.startInspection = function(type) {
+            const result = originalStartInspectionForTemplates.call(this, type);
+
+            // Populate templates after a short delay to ensure DOM is ready
+            setTimeout(() => {
+                populateTemplateSelector();
+            }, 100);
+
+            return result;
+        };
+    }
+
+    // Hook into resetInspectionForm to clear template selector
+    const originalResetForTemplates = window.resetInspectionForm;
+    if (originalResetForTemplates) {
+        window.resetInspectionForm = function() {
+            if (originalResetForTemplates) originalResetForTemplates.call(this);
+
+            // Reset template selector
+            const templateSelect = document.getElementById('templateSelect');
+            if (templateSelect) {
+                templateSelect.value = '';
+            }
+        };
+    }
+
+    // Initialize template selector
+    setupTemplateSelector();
+
+    console.log('Templates module initialized');
+});
+
+// ===== Voice Dictation Module (Speech Recognition) =====
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if browser supports Speech Recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+        console.warn('Speech Recognition API not supported in this browser');
+        // Hide voice buttons if not supported
+        const voiceButtons = document.querySelectorAll('.voice-btn');
+        voiceButtons.forEach(btn => {
+            btn.style.display = 'none';
+        });
+        return;
+    }
+
+    // Create recognition instance
+    let recognition = null;
+    let isRecording = false;
+    let currentTextarea = null;
+    let currentButton = null;
+
+    // Initialize Speech Recognition
+    function initRecognition() {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'es-ES'; // Spanish
+        recognition.continuous = true; // Keep listening
+        recognition.interimResults = true; // Show interim results
+
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        recognition.onstart = () => {
+            isRecording = true;
+            if (currentButton) {
+                currentButton.classList.add('recording');
+                const textSpan = currentButton.querySelector('.voice-btn-text');
+                if (textSpan) textSpan.textContent = 'Grabando...';
+            }
+            showToast('🎤 Escuchando... Habla ahora', 'info');
+        };
+
+        recognition.onresult = (event) => {
+            interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript + ' ';
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+
+            // Update textarea with current transcription
+            if (currentTextarea) {
+                const existingText = currentTextarea.value;
+                const cursorPos = currentTextarea.selectionStart;
+
+                // If there's existing text, add space before
+                const prefix = existingText && !existingText.endsWith(' ') && finalTranscript ? ' ' : '';
+
+                currentTextarea.value = existingText.substring(0, cursorPos) +
+                    prefix + finalTranscript + interimTranscript +
+                    existingText.substring(cursorPos);
+
+                // Show interim in placeholder
+                if (interimTranscript) {
+                    currentTextarea.placeholder = `Escuchando: "${interimTranscript}..."`;
+                }
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            stopRecording();
+
+            const errorMessages = {
+                'no-speech': 'No se detectó ninguna voz. Intenta de nuevo.',
+                'audio-capture': 'No se puede acceder al micrófono. Verifica los permisos.',
+                'not-allowed': 'Permiso de micrófono denegado. Permite el acceso al micrófono.',
+                'network': 'Error de red. Verifica tu conexión a internet.'
+            };
+
+            const message = errorMessages[event.error] || `Error: ${event.error}`;
+            showToast(message, 'error');
+        };
+
+        recognition.onend = () => {
+            if (isRecording) {
+                // Auto-restart if still recording (for continuous mode)
+                try {
+                    recognition.start();
+                } catch (e) {
+                    stopRecording();
+                }
+            }
+        };
+    }
+
+    // Start recording
+    function startRecording(textarea, button) {
+        if (isRecording) {
+            stopRecording();
+            return;
+        }
+
+        currentTextarea = textarea;
+        currentButton = button;
+
+        if (!recognition) {
+            initRecognition();
+        }
+
+        try {
+            recognition.start();
+        } catch (error) {
+            console.error('Failed to start recognition:', error);
+            showToast('No se pudo iniciar el micrófono', 'error');
+        }
+    }
+
+    // Stop recording
+    function stopRecording() {
+        isRecording = false;
+
+        if (recognition) {
+            try {
+                recognition.stop();
+            } catch (e) {
+                console.error('Error stopping recognition:', e);
+            }
+        }
+
+        if (currentButton) {
+            currentButton.classList.remove('recording');
+            const textSpan = currentButton.querySelector('.voice-btn-text');
+            if (textSpan) textSpan.textContent = 'Dictar';
+        }
+
+        if (currentTextarea) {
+            currentTextarea.placeholder = currentTextarea.id === 'observations' ?
+                'Añade cualquier observación relevante...' :
+                'Recomendaciones para el mantenimiento...';
+        }
+
+        currentTextarea = null;
+        currentButton = null;
+
+        showToast('✓ Dictado finalizado', 'success');
+    }
+
+    // Setup voice buttons
+    function setupVoiceButtons() {
+        // Observations voice button
+        const voiceObsBtn = document.getElementById('voiceObservationsBtn');
+        const observationsTextarea = document.getElementById('observations');
+
+        if (voiceObsBtn && observationsTextarea) {
+            voiceObsBtn.addEventListener('click', () => {
+                if (isRecording && currentTextarea === observationsTextarea) {
+                    stopRecording();
+                } else {
+                    startRecording(observationsTextarea, voiceObsBtn);
+                }
+            });
+        }
+
+        // Recommendations voice button
+        const voiceRecBtn = document.getElementById('voiceRecommendationsBtn');
+        const recommendationsTextarea = document.getElementById('recommendations');
+
+        if (voiceRecBtn && recommendationsTextarea) {
+            voiceRecBtn.addEventListener('click', () => {
+                if (isRecording && currentTextarea === recommendationsTextarea) {
+                    stopRecording();
+                } else {
+                    startRecording(recommendationsTextarea, voiceRecBtn);
+                }
+            });
+        }
+    }
+
+    // Initialize voice buttons
+    setupVoiceButtons();
+
+    // Stop recording when leaving inspection screen
+    const originalShowScreen = window.showScreen;
+    if (originalShowScreen) {
+        window.showScreen = function(screenName) {
+            if (screenName !== 'inspection' && isRecording) {
+                stopRecording();
+            }
+            return originalShowScreen.call(this, screenName);
+        };
+    }
+
+    console.log('Voice dictation module initialized (Speech Recognition API)');
+});
+
+// ===== Geolocation Module (GPS) =====
+document.addEventListener('DOMContentLoaded', () => {
+    let currentCoordinates = null;
+
+    // Check if browser supports Geolocation
+    if (!navigator.geolocation) {
+        console.warn('Geolocation API not supported in this browser');
+        const gpsButton = document.getElementById('getLocationBtn');
+        if (gpsButton) {
+            gpsButton.style.display = 'none';
+        }
+        return;
+    }
+
+    // Get current GPS location
+    function getCurrentLocation() {
+        const locationInput = document.getElementById('location');
+        const gpsButton = document.getElementById('getLocationBtn');
+        const gpsCoords = document.getElementById('gpsCoords');
+
+        if (!locationInput || !gpsButton) return;
+
+        // Show loading state
+        gpsButton.disabled = true;
+        gpsButton.innerHTML = '<span class="icon">⌛</span><span>Obteniendo...</span>';
+        showToast('📍 Obteniendo ubicación GPS...', 'info');
+
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        };
+
+        navigator.geolocation.getCurrentPosition(
+            // Success callback
+            (position) => {
+                const lat = position.coords.latitude.toFixed(6);
+                const lng = position.coords.longitude.toFixed(6);
+                const accuracy = Math.round(position.coords.accuracy);
+
+                currentCoordinates = {
+                    latitude: lat,
+                    longitude: lng,
+                    accuracy: accuracy,
+                    timestamp: new Date().toISOString()
+                };
+
+                // Update location field with coordinates
+                const coordsText = `GPS: ${lat}, ${lng}`;
+
+                // If location field is empty, use coordinates
+                if (!locationInput.value.trim()) {
+                    locationInput.value = coordsText;
+                }
+
+                // Show coordinates below
+                if (gpsCoords) {
+                    gpsCoords.textContent = `📍 Coordenadas: ${lat}, ${lng} (±${accuracy}m) - Click para ver mapa`;
+                    gpsCoords.style.display = 'block';
+                    gpsCoords.style.cursor = 'pointer';
+                    gpsCoords.style.color = 'var(--primary-color)';
+
+                    // Click to open in Google Maps
+                    gpsCoords.onclick = () => {
+                        const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+                        window.open(mapsUrl, '_blank');
+                    };
+                }
+
+                // Try to get reverse geocoding (address from coordinates)
+                reverseGeocode(lat, lng, locationInput);
+
+                // Reset button
+                gpsButton.disabled = false;
+                gpsButton.innerHTML = '<span class="icon">✓</span><span>GPS</span>';
+                gpsButton.style.color = '#4caf50';
+
+                showToast(`✓ Ubicación obtenida (±${accuracy}m)`, 'success');
+
+                // Save coordinates in inspection data
+                window.lastGPSCoordinates = currentCoordinates;
+            },
+            // Error callback
+            (error) => {
+                console.error('Geolocation error:', error);
+
+                const errorMessages = {
+                    1: 'Permiso de ubicación denegado. Permite el acceso.',
+                    2: 'Ubicación no disponible. Verifica el GPS.',
+                    3: 'Tiempo agotado. Intenta de nuevo.'
+                };
+
+                const message = errorMessages[error.code] || 'Error al obtener ubicación';
+                showToast(message, 'error');
+
+                // Reset button
+                gpsButton.disabled = false;
+                gpsButton.innerHTML = '<span class="icon">📍</span><span>GPS</span>';
+            },
+            options
+        );
+    }
+
+    // Reverse geocoding: Get address from coordinates
+    async function reverseGeocode(lat, lng, locationInput) {
+        try {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18`;
+
+            const response = await fetch(url, {
+                headers: { 'User-Agent': 'RETIMBRASUR-App' }
+            });
+
+            if (!response.ok) throw new Error('Geocoding failed');
+
+            const data = await response.json();
+
+            if (data && data.address) {
+                const addr = data.address;
+                let parts = [];
+
+                if (addr.road) parts.push(addr.road);
+                if (addr.house_number) parts.push(addr.house_number);
+                if (addr.suburb) parts.push(addr.suburb);
+                if (addr.city || addr.town) parts.push(addr.city || addr.town);
+
+                const readable = parts.join(', ');
+
+                if (readable && !locationInput.value.includes(readable)) {
+                    const current = locationInput.value;
+                    locationInput.value = current.startsWith('GPS:') ?
+                        `${readable} (${current})` : readable;
+
+                    showToast('✓ Dirección obtenida', 'success');
+                }
+            }
+        } catch (error) {
+            console.warn('Reverse geocoding failed:', error);
+        }
+    }
+
+    // Setup GPS button
+    function setupGPSButton() {
+        const gpsButton = document.getElementById('getLocationBtn');
+        if (gpsButton) {
+            gpsButton.addEventListener('click', getCurrentLocation);
+        }
+    }
+
+    // Hook into saveInspection to include GPS
+    const originalSaveInspectionWithGPS = window.saveInspection;
+    if (originalSaveInspectionWithGPS) {
+        window.saveInspection = function(status) {
+            const result = originalSaveInspectionWithGPS.call(this, status);
+
+            if (window.lastGPSCoordinates && inspections.length > 0) {
+                const lastInspection = inspections[inspections.length - 1];
+                lastInspection.gpsCoordinates = window.lastGPSCoordinates;
+                localStorage.setItem('inspections', JSON.stringify(inspections));
+                window.lastGPSCoordinates = null;
+            }
+
+            return result;
+        };
+    }
+
+    // Hook into reset to clear GPS
+    const originalResetForGPS = window.resetInspectionForm;
+    if (originalResetForGPS) {
+        window.resetInspectionForm = function() {
+            if (originalResetForGPS) originalResetForGPS.call(this);
+
+            window.lastGPSCoordinates = null;
+            const gpsCoords = document.getElementById('gpsCoords');
+            if (gpsCoords) {
+                gpsCoords.style.display = 'none';
+                gpsCoords.textContent = '';
+            }
+
+            const gpsButton = document.getElementById('getLocationBtn');
+            if (gpsButton) {
+                gpsButton.disabled = false;
+                gpsButton.innerHTML = '<span class="icon">📍</span><span>GPS</span>';
+                gpsButton.style.color = '';
+            }
+        };
+    }
+
+    setupGPSButton();
+
+    console.log('Geolocation module initialized (GPS API)');
+});
+
+// ===== QR Scanner Module =====
+document.addEventListener('DOMContentLoaded', () => {
+    let html5QrcodeScanner = null;
+    let isScanning = false;
+
+    // Check if Html5Qrcode is available
+    if (typeof Html5Qrcode === 'undefined') {
+        console.warn('Html5Qrcode library not loaded');
+        const scanBtn = document.getElementById('scanQRBtn');
+        if (scanBtn) scanBtn.style.display = 'none';
+        return;
+    }
+
+    const qrScannerModal = document.getElementById('qrScannerModal');
+    const scanQRBtn = document.getElementById('scanQRBtn');
+    const closeQRScannerModal = document.getElementById('closeQRScannerModal');
+    const stopQRScanBtn = document.getElementById('stopQRScanBtn');
+    const qrResultDiv = document.getElementById('qrResult');
+    const qrResultText = document.getElementById('qrResultText');
+
+    // Start QR Scanner
+    function startQRScanner() {
+        if (isScanning) return;
+
+        const qrReaderDiv = document.getElementById('qrReader');
+        if (!qrReaderDiv) return;
+
+        // Show modal
+        qrScannerModal.classList.add('active');
+        qrResultDiv.style.display = 'none';
+
+        // Initialize scanner
+        html5QrcodeScanner = new Html5Qrcode("qrReader");
+
+        const config = {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0
+        };
+
+        html5QrcodeScanner.start(
+            { facingMode: "environment" }, // Use back camera
+            config,
+            (decodedText, decodedResult) => {
+                // Success callback
+                console.log(`QR Code scanned: ${decodedText}`);
+
+                // Show result
+                qrResultText.textContent = decodedText;
+                qrResultDiv.style.display = 'block';
+
+                // Auto-fill equipment ID
+                const equipmentIdInput = document.getElementById('equipmentId');
+                if (equipmentIdInput) {
+                    equipmentIdInput.value = decodedText;
+                    equipmentIdInput.focus();
+                }
+
+                // Show success toast
+                showToast(`✓ QR escaneado: ${decodedText}`, 'success');
+
+                // Stop scanner after 2 seconds
+                setTimeout(() => {
+                    stopQRScanner();
+                }, 2000);
+            },
+            (errorMessage) => {
+                // Error callback (camera feed, not actual error)
+                // console.log(`QR scan error: ${errorMessage}`);
+            }
+        ).then(() => {
+            isScanning = true;
+            showToast('📷 Escáner activo - Apunta al código QR', 'info');
+        }).catch((err) => {
+            console.error('Unable to start scanner:', err);
+            showToast('No se pudo iniciar la cámara. Verifica los permisos.', 'error');
+            qrScannerModal.classList.remove('active');
+        });
+    }
+
+    // Stop QR Scanner
+    function stopQRScanner() {
+        if (!isScanning || !html5QrcodeScanner) {
+            qrScannerModal.classList.remove('active');
+            return;
+        }
+
+        html5QrcodeScanner.stop().then(() => {
+            isScanning = false;
+            html5QrcodeScanner = null;
+            qrScannerModal.classList.remove('active');
+            showToast('Escáner detenido', 'success');
+        }).catch((err) => {
+            console.error('Error stopping scanner:', err);
+            isScanning = false;
+            html5QrcodeScanner = null;
+            qrScannerModal.classList.remove('active');
+        });
+    }
+
+    // Event listeners
+    if (scanQRBtn) {
+        scanQRBtn.addEventListener('click', () => {
+            startQRScanner();
+        });
+    }
+
+    if (closeQRScannerModal) {
+        closeQRScannerModal.addEventListener('click', () => {
+            stopQRScanner();
+        });
+    }
+
+    if (stopQRScanBtn) {
+        stopQRScanBtn.addEventListener('click', () => {
+            stopQRScanner();
+        });
+    }
+
+    // Close modal when clicking outside
+    if (qrScannerModal) {
+        qrScannerModal.addEventListener('click', (e) => {
+            if (e.target === qrScannerModal) {
+                stopQRScanner();
+            }
+        });
+    }
+
+    console.log('QR Scanner module initialized (Html5Qrcode)');
+});

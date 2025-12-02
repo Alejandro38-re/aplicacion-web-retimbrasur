@@ -180,14 +180,39 @@
                 <!-- Equipment Info Form -->
                 <div class="form-section">
                     <h3 class="section-title">Información del Equipo</h3>
+
+                    <!-- Template Selector -->
+                    <div class="form-group" style="margin-bottom: 20px; background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 12px;">
+                        <label for="templateSelect">📋 Usar como Plantilla (Opcional)</label>
+                        <select id="templateSelect" class="filter-select" style="margin-bottom: 10px;">
+                            <option value="">-- Nuevo equipo (vacío) --</option>
+                        </select>
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
+                            Selecciona una inspección anterior para copiar sus datos y ahorrar tiempo
+                        </p>
+                    </div>
+
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="equipmentId">ID del Equipo *</label>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label for="equipmentId">ID del Equipo *</label>
+                                <button type="button" id="scanQRBtn" class="btn btn-ghost btn-sm" title="Escanear código QR">
+                                    <span class="icon">📷</span>
+                                    <span>Escanear QR</span>
+                                </button>
+                            </div>
                             <input type="text" id="equipmentId" required placeholder="Ej: EXT-001">
                         </div>
                         <div class="form-group">
-                            <label for="location">Ubicación *</label>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label for="location">Ubicación *</label>
+                                <button type="button" id="getLocationBtn" class="btn btn-ghost btn-sm" title="Obtener ubicación GPS">
+                                    <span class="icon">📍</span>
+                                    <span>GPS</span>
+                                </button>
+                            </div>
                             <input type="text" id="location" required placeholder="Ej: Planta 1, Pasillo A">
+                            <small id="gpsCoords" style="display: none; color: var(--text-secondary); font-size: 0.75rem; margin-top: 4px;"></small>
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1;">
                             <label for="equipmentPhoto">📸 Fotos del Equipo <span style="color: var(--text-secondary); font-size: 0.85rem;">(Máximo 5)</span></label>
@@ -244,12 +269,24 @@
 
                     <div class="form-grid" style="margin-top: 20px;">
                         <div class="form-group" style="grid-column: 1 / -1;">
-                            <label for="observations">Observaciones</label>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label for="observations">Observaciones</label>
+                                <button type="button" id="voiceObservationsBtn" class="btn btn-ghost btn-sm voice-btn" title="Dictar por voz">
+                                    <span class="icon">🎤</span>
+                                    <span class="voice-btn-text">Dictar</span>
+                                </button>
+                            </div>
                             <textarea id="observations" rows="4"
                                 placeholder="Añade cualquier observación relevante..."></textarea>
                         </div>
                         <div class="form-group" style="grid-column: 1 / -1;">
-                            <label for="recommendations">Recomendaciones</label>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <label for="recommendations">Recomendaciones</label>
+                                <button type="button" id="voiceRecommendationsBtn" class="btn btn-ghost btn-sm voice-btn" title="Dictar por voz">
+                                    <span class="icon">🎤</span>
+                                    <span class="voice-btn-text">Dictar</span>
+                                </button>
+                            </div>
                             <textarea id="recommendations" rows="4"
                                 placeholder="Recomendaciones para el mantenimiento..."></textarea>
                         </div>
@@ -420,6 +457,28 @@
         </div>
     </main>
 
+    <!-- QR Scanner Modal -->
+    <div id="qrScannerModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>📷 Escanear Código QR</h3>
+                <button class="modal-close" id="closeQRScannerModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="qrReader" style="width: 100%; max-width: 500px; margin: 0 auto;"></div>
+                <div id="qrResult" style="margin-top: 20px; display: none;">
+                    <div style="padding: 15px; background: rgba(76, 175, 80, 0.1); border-radius: 8px; border-left: 4px solid #4caf50;">
+                        <p style="margin: 0 0 10px 0; font-weight: 600; color: #4caf50;">✓ QR Escaneado</p>
+                        <p id="qrResultText" style="margin: 0; font-family: monospace; word-break: break-all;"></p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="stopQRScanBtn" class="btn btn-secondary">Cerrar Escáner</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notifications -->
     <div id="toastContainer" class="toast-container"></div>
 
@@ -576,6 +635,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="app.js"></script>
 
     <!-- PWA Service Worker Registration -->
