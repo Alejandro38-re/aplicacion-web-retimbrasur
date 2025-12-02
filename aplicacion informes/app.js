@@ -2928,3 +2928,472 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Digital signatures initialized');
     }
 });
+
+// ===== AppSheet Synchronization Module =====
+document.addEventListener('DOMContentLoaded', () => {
+    // AppSheet API Configuration
+    const APPSHEET_CONFIG = {
+        apiUrl: '', // TO BE CONFIGURED: AppSheet API endpoint
+        appId: '', // TO BE CONFIGURED: AppSheet App ID
+        apiKey: '', // TO BE CONFIGURED: AppSheet API Key
+        tableName: 'Inspecciones', // Table name in AppSheet
+        photosTableName: 'Fotos', // Photos table in AppSheet
+        driveFolder: 'RETIMBRASUR_Photos', // Google Drive folder for photos
+        maxRetries: 3,
+        retryDelay: 2000 // 2 seconds
+    };
+
+    // Sync status tracking
+    let syncStatus = {
+        isSyncing: false,
+        lastSync: localStorage.getItem('lastSyncDate') || null,
+        pendingSync: JSON.parse(localStorage.getItem('pendingSync')) || [],
+        errors: []
+    };
+
+    // Create sync button in header
+    function createSyncButton() {
+        const headerActions = document.querySelector('.header-actions');
+        if (!headerActions) return;
+
+        const syncBtn = document.createElement('button');
+        syncBtn.id = 'syncAppSheetBtn';
+        syncBtn.className = 'btn btn-secondary';
+        syncBtn.innerHTML = `
+            <span class="icon">🔄</span>
+            <span class="sync-text">Sincronizar</span>
+        `;
+        syncBtn.title = 'Sincronizar con AppSheet';
+
+        // Add sync status indicator
+        const syncIndicator = document.createElement('span');
+        syncIndicator.id = 'syncIndicator';
+        syncIndicator.className = 'sync-indicator';
+        syncIndicator.style.cssText = `
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ccc;
+            border: 2px solid white;
+        `;
+        syncBtn.style.position = 'relative';
+        syncBtn.appendChild(syncIndicator);
+
+        // Insert before export button
+        const exportBtn = document.getElementById('exportBtn');
+        if (exportBtn) {
+            headerActions.insertBefore(syncBtn, exportBtn);
+        } else {
+            headerActions.appendChild(syncBtn);
+        }
+
+        // Update sync indicator
+        updateSyncIndicator();
+
+        // Sync button click handler
+        syncBtn.addEventListener('click', async () => {
+            await syncWithAppSheet();
+        });
+
+        return syncBtn;
+    }
+
+    // Update sync indicator color
+    function updateSyncIndicator() {
+        const indicator = document.getElementById('syncIndicator');
+        if (!indicator) return;
+
+        const pendingCount = syncStatus.pendingSync.length;
+
+        if (syncStatus.isSyncing) {
+            indicator.style.background = '#2196F3'; // Blue - syncing
+            indicator.style.animation = 'pulse 1.5s infinite';
+        } else if (pendingCount > 0) {
+            indicator.style.background = '#ff9800'; // Orange - pending
+            indicator.title = `${pendingCount} inspecciones pendientes de sincronizar`;
+        } else {
+            indicator.style.background = '#4caf50'; // Green - synced
+            indicator.title = syncStatus.lastSync ? `Última sincronización: ${new Date(syncStatus.lastSync).toLocaleString()}` : 'Sin sincronizar';
+        }
+    }
+
+    // Upload photo to Google Drive via AppSheet
+    async function uploadPhotoToGoogleDrive(photoBase64, fileName, retryCount = 0) {
+        if (!APPSHEET_CONFIG.apiUrl || !APPSHEET_CONFIG.apiKey) {
+            console.warn('AppSheet no configurado. Las fotos se guardarán solo localmente.');
+            return { success: false, url: null, localOnly: true };
+        }
+
+        try {
+            // Convert base64 to blob
+            const response = await fetch(photoBase64);
+            const blob = await response.blob();
+
+            // Create FormData for upload
+            const formData = new FormData();
+            formData.append('file', blob, fileName);
+            formData.append('folder', APPSHEET_CONFIG.driveFolder);
+
+            // Upload to AppSheet/Google Drive
+            const uploadResponse = await fetch(`${APPSHEET_CONFIG.apiUrl}/uploadPhoto`, {
+                method: 'POST',
+                headers: {
+                    'ApplicationAccessKey': APPSHEET_CONFIG.apiKey,
+                    'AppId': APPSHEET_CONFIG.appId
+                },
+                body: formData
+            });
+
+            if (!uploadResponse.ok) {
+                throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+            }
+
+            const result = await uploadResponse.json();
+
+            return {
+                success: true,
+                url: result.url || result.fileUrl,
+                driveId: result.fileId
+            };
+
+        } catch (error) {
+            console.error('Error uploading photo:', error);
+
+            // Retry logic
+            if (retryCount < APPSHEET_CONFIG.maxRetries) {
+                console.log(`Retrying upload (${retryCount + 1}/${APPSHEET_CONFIG.maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, APPSHEET_CONFIG.retryDelay * (retryCount + 1)));
+                return uploadPhotoToGoogleDrive(photoBase64, fileName, retryCount + 1);
+            }
+
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    // Upload multiple photos
+    async function uploadInspectionPhotos(inspection) {
+        const photoUrls = [];
+
+        // Handle single photo (legacy)
+        if (inspection.photo) {
+            const fileName = `${inspection.equipmentType}_${inspection.equipmentId}_${Date.now()}.jpg`;
+            const result = await uploadPhotoToGoogleDrive(inspection.photo, fileName);
+            if (result.success) {
+                photoUrls.push(result.url);
+            }
+        }
+
+        // Handle multiple photos
+        if (inspection.photos && Array.isArray(inspection.photos)) {
+            for (let i = 0; i < inspection.photos.length; i++) {
+                const photo = inspection.photos[i];
+                const fileName = `${inspection.equipmentType}_${inspection.equipmentId}_${i + 1}_${Date.now()}.jpg`;
+                const result = await uploadPhotoToGoogleDrive(photo, fileName);
+                if (result.success) {
+                    photoUrls.push(result.url);
+                }
+            }
+        }
+
+        return photoUrls;
+    }
+
+    // Sync single inspection to AppSheet
+    async function syncInspection(inspection, retryCount = 0) {
+        if (!APPSHEET_CONFIG.apiUrl || !APPSHEET_CONFIG.apiKey) {
+            console.warn('AppSheet no configurado. Los datos se mantendrán solo localmente.');
+            return { success: false, localOnly: true };
+        }
+
+        try {
+            // Upload photos first
+            const photoUrls = await uploadInspectionPhotos(inspection);
+
+            // Prepare inspection data for AppSheet
+            const appSheetData = {
+                ID: inspection.id,
+                WorkCenterId: inspection.workCenterId,
+                WorkCenterName: inspection.workCenterName,
+                EquipmentType: inspection.equipmentType,
+                EquipmentId: inspection.equipmentId,
+                Location: inspection.location,
+                InspectionDate: inspection.inspectionDate,
+                Technician: inspection.technician,
+                TechnicianId: inspection.technicianId || '',
+
+                // Equipment details
+                Manufacturer: inspection.manufacturer || '',
+                Brand: inspection.brand || '',
+                Model: inspection.model || '',
+                ManufacturingDate: inspection.manufacturingDate || '',
+                LastRetestDate: inspection.lastRetestDate || '',
+
+                // Checklist results
+                TotalItems: inspection.checklist.length,
+                CheckedItems: inspection.checklist.filter(i => i.checked).length,
+                OkCount: inspection.checklist.filter(i => i.status === 'ok').length,
+                WarningCount: inspection.checklist.filter(i => i.status === 'warning').length,
+                ErrorCount: inspection.checklist.filter(i => i.status === 'error').length,
+                CompletionPercentage: Math.round((inspection.checklist.filter(i => i.checked).length / inspection.checklist.length) * 100),
+
+                // Checklist JSON
+                ChecklistData: JSON.stringify(inspection.checklist),
+
+                // Text fields
+                Observations: inspection.observations || '',
+                Recommendations: inspection.recommendations || '',
+
+                // Photos
+                PhotoUrls: photoUrls.join(','),
+                PhotoCount: photoUrls.length,
+
+                // Signatures
+                TechnicianSignature: inspection.technicianSignature || '',
+                ClientSignature: inspection.clientSignature || '',
+
+                // Metadata
+                Status: inspection.status,
+                CreatedAt: inspection.createdAt,
+                UpdatedAt: new Date().toISOString(),
+                SyncedAt: new Date().toISOString()
+            };
+
+            // Send to AppSheet API
+            const response = await fetch(`${APPSHEET_CONFIG.apiUrl}/tables/${APPSHEET_CONFIG.tableName}/Action`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ApplicationAccessKey': APPSHEET_CONFIG.apiKey,
+                    'AppId': APPSHEET_CONFIG.appId
+                },
+                body: JSON.stringify({
+                    Action: 'Add',
+                    Properties: {},
+                    Rows: [appSheetData]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`AppSheet API error: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+
+            // Mark as synced in local storage
+            const inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+            const inspectionIndex = inspections.findIndex(i => i.id === inspection.id);
+            if (inspectionIndex !== -1) {
+                inspections[inspectionIndex].synced = true;
+                inspections[inspectionIndex].syncedAt = new Date().toISOString();
+                localStorage.setItem('inspections', JSON.stringify(inspections));
+            }
+
+            return {
+                success: true,
+                result: result
+            };
+
+        } catch (error) {
+            console.error('Error syncing inspection:', error);
+
+            // Retry logic
+            if (retryCount < APPSHEET_CONFIG.maxRetries) {
+                console.log(`Retrying sync (${retryCount + 1}/${APPSHEET_CONFIG.maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, APPSHEET_CONFIG.retryDelay * (retryCount + 1)));
+                return syncInspection(inspection, retryCount + 1);
+            }
+
+            // Add to pending sync queue
+            if (!syncStatus.pendingSync.find(p => p.id === inspection.id)) {
+                syncStatus.pendingSync.push({
+                    id: inspection.id,
+                    timestamp: new Date().toISOString(),
+                    error: error.message
+                });
+                localStorage.setItem('pendingSync', JSON.stringify(syncStatus.pendingSync));
+            }
+
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    // Main sync function - sync all unsynced inspections
+    async function syncWithAppSheet() {
+        if (syncStatus.isSyncing) {
+            showToast('Ya hay una sincronización en curso', 'warning');
+            return;
+        }
+
+        // Check if AppSheet is configured
+        if (!APPSHEET_CONFIG.apiUrl || !APPSHEET_CONFIG.apiKey) {
+            showToast('AppSheet no está configurado. Configure las credenciales en el código.', 'error');
+            console.warn('Para configurar AppSheet, edite APPSHEET_CONFIG en app.js');
+            return;
+        }
+
+        // Check internet connection
+        if (!navigator.onLine) {
+            showToast('Sin conexión a Internet. La sincronización se realizará cuando esté conectado.', 'warning');
+            return;
+        }
+
+        syncStatus.isSyncing = true;
+        updateSyncIndicator();
+
+        const syncBtn = document.getElementById('syncAppSheetBtn');
+        if (syncBtn) {
+            syncBtn.disabled = true;
+            const syncText = syncBtn.querySelector('.sync-text');
+            if (syncText) syncText.textContent = 'Sincronizando...';
+        }
+
+        try {
+            // Get all inspections
+            const inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+
+            // Filter unsynced inspections
+            const unsyncedInspections = inspections.filter(i => !i.synced);
+
+            if (unsyncedInspections.length === 0) {
+                showToast('Todas las inspecciones están sincronizadas', 'success');
+                syncStatus.isSyncing = false;
+                updateSyncIndicator();
+                if (syncBtn) {
+                    syncBtn.disabled = false;
+                    const syncText = syncBtn.querySelector('.sync-text');
+                    if (syncText) syncText.textContent = 'Sincronizar';
+                }
+                return;
+            }
+
+            showToast(`Sincronizando ${unsyncedInspections.length} inspecciones...`, 'info');
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            // Sync each inspection
+            for (const inspection of unsyncedInspections) {
+                const result = await syncInspection(inspection);
+                if (result.success) {
+                    successCount++;
+                    // Remove from pending queue
+                    syncStatus.pendingSync = syncStatus.pendingSync.filter(p => p.id !== inspection.id);
+                } else if (!result.localOnly) {
+                    errorCount++;
+                }
+
+                // Update progress
+                const progress = Math.round(((successCount + errorCount) / unsyncedInspections.length) * 100);
+                if (syncBtn) {
+                    const syncText = syncBtn.querySelector('.sync-text');
+                    if (syncText) syncText.textContent = `${progress}%`;
+                }
+            }
+
+            // Update sync status
+            syncStatus.lastSync = new Date().toISOString();
+            syncStatus.isSyncing = false;
+            localStorage.setItem('lastSyncDate', syncStatus.lastSync);
+            localStorage.setItem('pendingSync', JSON.stringify(syncStatus.pendingSync));
+
+            // Show result
+            if (errorCount === 0) {
+                showToast(`✅ ${successCount} inspecciones sincronizadas correctamente`, 'success');
+            } else {
+                showToast(`⚠️ ${successCount} sincronizadas, ${errorCount} con errores`, 'warning');
+            }
+
+        } catch (error) {
+            console.error('Sync error:', error);
+            showToast('Error durante la sincronización: ' + error.message, 'error');
+            syncStatus.errors.push({
+                timestamp: new Date().toISOString(),
+                error: error.message
+            });
+        } finally {
+            syncStatus.isSyncing = false;
+            updateSyncIndicator();
+
+            if (syncBtn) {
+                syncBtn.disabled = false;
+                const syncText = syncBtn.querySelector('.sync-text');
+                if (syncText) syncText.textContent = 'Sincronizar';
+            }
+        }
+    }
+
+    // Auto-sync when completing an inspection
+    const originalSaveInspection = window.saveInspection;
+    if (originalSaveInspection) {
+        window.saveInspection = async function(status) {
+            const result = originalSaveInspection.call(this, status);
+
+            // Auto-sync if online and configured
+            if (navigator.onLine && APPSHEET_CONFIG.apiUrl && APPSHEET_CONFIG.apiKey) {
+                // Get the last inspection
+                const inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+                if (inspections.length > 0) {
+                    const lastInspection = inspections[inspections.length - 1];
+
+                    // Sync in background
+                    setTimeout(async () => {
+                        const syncResult = await syncInspection(lastInspection);
+                        if (syncResult.success) {
+                            showToast('Inspección sincronizada con AppSheet', 'success');
+                            updateSyncIndicator();
+                        }
+                    }, 1000);
+                }
+            }
+
+            return result;
+        };
+    }
+
+    // Background sync via Service Worker
+    if ('serviceWorker' in navigator && 'sync' in self.registration) {
+        // Register background sync when going offline
+        window.addEventListener('offline', () => {
+            navigator.serviceWorker.ready.then((registration) => {
+                return registration.sync.register('sync-inspections');
+            }).catch((error) => {
+                console.log('Background sync registration failed:', error);
+            });
+        });
+
+        // Sync when coming back online
+        window.addEventListener('online', () => {
+            setTimeout(() => {
+                syncWithAppSheet();
+            }, 2000);
+        });
+    }
+
+    // Initialize sync button
+    createSyncButton();
+
+    // Add pulse animation for sync indicator
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Make sync function available globally
+    window.syncWithAppSheet = syncWithAppSheet;
+
+    console.log('AppSheet synchronization module initialized');
+    console.log('Configure APPSHEET_CONFIG in app.js to enable synchronization');
+});

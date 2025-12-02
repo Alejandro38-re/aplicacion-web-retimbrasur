@@ -11,6 +11,22 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#d32f2f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="RETIMBRASUR">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="RETIMBRASUR">
+
+    <!-- PWA Icons -->
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 </head>
 
 <body>
@@ -561,6 +577,105 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="app.js"></script>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        // Register Service Worker for offline functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then((registration) => {
+                        console.log('✅ Service Worker registrado correctamente:', registration.scope);
+
+                        // Check for updates periodically
+                        setInterval(() => {
+                            registration.update();
+                        }, 60000); // Check every minute
+
+                        // Listen for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New service worker available
+                                    if (confirm('Hay una nueva versión disponible. ¿Deseas actualizar?')) {
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                        window.location.reload();
+                                    }
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        console.error('❌ Error al registrar Service Worker:', error);
+                    });
+
+                // Handle controller change (when new service worker activates)
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    window.location.reload();
+                });
+            });
+        } else {
+            console.warn('⚠️ Service Workers no están soportados en este navegador');
+        }
+
+        // PWA Install Prompt
+        let deferredPrompt;
+        const installBtn = document.createElement('button');
+        installBtn.id = 'installPWABtn';
+        installBtn.className = 'btn btn-primary install-pwa-btn';
+        installBtn.innerHTML = '<span class="icon">⬇️</span> Instalar App';
+        installBtn.style.display = 'none';
+        installBtn.style.position = 'fixed';
+        installBtn.style.bottom = '20px';
+        installBtn.style.right = '20px';
+        installBtn.style.zIndex = '9999';
+        installBtn.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later
+            deferredPrompt = e;
+            // Show install button
+            document.body.appendChild(installBtn);
+            installBtn.style.display = 'block';
+
+            installBtn.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    // Show the install prompt
+                    deferredPrompt.prompt();
+                    // Wait for the user to respond to the prompt
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log(`User response to the install prompt: ${outcome}`);
+                    // Clear the deferredPrompt
+                    deferredPrompt = null;
+                    // Hide the install button
+                    installBtn.style.display = 'none';
+                }
+            });
+        });
+
+        // Hide install button when app is installed
+        window.addEventListener('appinstalled', () => {
+            console.log('✅ PWA instalada correctamente');
+            if (installBtn) {
+                installBtn.style.display = 'none';
+            }
+            deferredPrompt = null;
+        });
+
+        // Display online/offline status
+        window.addEventListener('online', () => {
+            console.log('🟢 Conexión restaurada');
+            showToast('Conexión a Internet restaurada', 'success');
+        });
+
+        window.addEventListener('offline', () => {
+            console.log('🔴 Sin conexión a Internet');
+            showToast('Trabajando sin conexión - Los datos se guardarán localmente', 'warning');
+        });
+    </script>
 </body>
 
 </html>
