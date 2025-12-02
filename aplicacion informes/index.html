@@ -37,6 +37,10 @@
                 <h1>Sistema de Inspección PCI</h1>
             </div>
             <div class="header-actions">
+                <button id="importBtn" class="btn btn-secondary">
+                    <span class="icon">📥</span>
+                    Importar
+                </button>
                 <button id="exportBtn" class="btn btn-secondary">
                     <span class="icon">📊</span>
                     Exportar Datos
@@ -475,6 +479,77 @@
             </div>
             <div class="modal-footer">
                 <button id="stopQRScanBtn" class="btn btn-secondary">Cerrar Escáner</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Inspections Modal -->
+    <div id="importModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>📥 Importar Inspecciones</h3>
+                <button class="modal-close" id="closeImportModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 20px;">
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">
+                        Importa inspecciones desde un archivo Excel (.xlsx) o CSV exportado previamente o desde AppSheet.
+                    </p>
+
+                    <div class="form-group">
+                        <label for="importFile" style="display: block; margin-bottom: 10px;">
+                            Seleccionar archivo
+                        </label>
+                        <input type="file" id="importFile" accept=".xlsx,.xls,.csv"
+                               style="padding: 10px; border: 2px dashed var(--border-color); border-radius: 8px; width: 100%; cursor: pointer;">
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                            Modo de importación
+                        </label>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid var(--border-color);">
+                                <input type="radio" name="importMode" value="new" checked style="margin-right: 10px;">
+                                <div>
+                                    <div style="font-weight: 500;">Solo nuevas</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">Importar solo inspecciones que no existan (por ID)</div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; cursor: pointer; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid var(--border-color);">
+                                <input type="radio" name="importMode" value="overwrite" style="margin-right: 10px;">
+                                <div>
+                                    <div style="font-weight: 500;">Sobrescribir existentes</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">Actualizar inspecciones existentes y agregar nuevas</div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; cursor: pointer; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid var(--border-color);">
+                                <input type="radio" name="importMode" value="replace" style="margin-right: 10px;">
+                                <div>
+                                    <div style="font-weight: 500; color: #ff9800;">Reemplazar todo</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary);">⚠️ Eliminar todas las inspecciones actuales y reemplazar con las importadas</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="importResults" style="display: none; margin-top: 20px; padding: 15px; background: rgba(76, 175, 80, 0.1); border-radius: 8px; border-left: 4px solid #4caf50;">
+                    <h4 style="margin: 0 0 10px 0; color: #4caf50;">✓ Importación Completada</h4>
+                    <div id="importStats" style="font-size: 0.9rem;"></div>
+                </div>
+
+                <div id="importError" style="display: none; margin-top: 20px; padding: 15px; background: rgba(244, 67, 54, 0.1); border-radius: 8px; border-left: 4px solid #f44336;">
+                    <h4 style="margin: 0 0 10px 0; color: #f44336;">✗ Error al Importar</h4>
+                    <div id="importErrorText" style="font-size: 0.9rem;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelImportBtn" class="btn btn-secondary">Cancelar</button>
+                <button id="executeImportBtn" class="btn btn-primary" disabled>
+                    <span class="icon">📥</span>
+                    Importar
+                </button>
             </div>
         </div>
     </div>
