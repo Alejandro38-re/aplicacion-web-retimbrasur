@@ -409,6 +409,92 @@ let currentEquipmentType = null;
 let inspections = JSON.parse(localStorage.getItem('inspections')) || [];
 let currentInspection = null;
 
+// ===== INSPECTION REMINDER SYSTEM =====
+// Periodicidad de inspecciones por tipo de equipo (en meses)
+const inspectionPeriodicity = {
+    'extintores': 12,           // Anual
+    'bies': 12,                 // Anual
+    'grupos-presion': 12,       // Anual
+    'hidrantes': 12,            // Anual
+    'gas': 12,                  // Anual
+    'sprinklers': 12,           // Anual
+    'agua-pulverizada': 12,     // Anual
+    'deteccion': 12,            // Anual
+    'espuma': 12,               // Anual
+    'puertas-rf': 12            // Anual
+};
+
+// Calculate next inspection date
+function calculateNextInspection(lastDate, equipmentType) {
+    if (!lastDate) return null;
+
+    const months = inspectionPeriodicity[equipmentType] || 12;
+    const nextDate = new Date(lastDate);
+    nextDate.setMonth(nextDate.getMonth() + months);
+
+    return nextDate;
+}
+
+// Get inspection status based on next inspection date
+// Returns: 'ok' (green), 'warning' (yellow), 'overdue' (red)
+function getInspectionStatus(nextInspectionDate) {
+    if (!nextInspectionDate) return 'unknown';
+
+    const today = new Date();
+    const next = new Date(nextInspectionDate);
+    const diffTime = next - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+        return 'overdue';  // Vencido (rojo)
+    } else if (diffDays <= 30) {
+        return 'warning';  // Próximo a vencer (amarillo)
+    } else {
+        return 'ok';       // Al día (verde)
+    }
+}
+
+// Get days until/since inspection
+function getDaysUntilInspection(nextInspectionDate) {
+    if (!nextInspectionDate) return null;
+
+    const today = new Date();
+    const next = new Date(nextInspectionDate);
+    const diffTime = next - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return diffDays;
+}
+
+// Get status badge HTML for equipment card
+function getInspectionStatusBadge(status, daysUntil) {
+    const badges = {
+        'ok': {
+            class: 'inspection-badge-ok',
+            icon: '✓',
+            text: 'Al día'
+        },
+        'warning': {
+            class: 'inspection-badge-warning',
+            icon: '⚠️',
+            text: daysUntil > 0 ? `${daysUntil} días` : 'Próximo'
+        },
+        'overdue': {
+            class: 'inspection-badge-overdue',
+            icon: '✗',
+            text: daysUntil < 0 ? `Vencido ${Math.abs(daysUntil)}d` : 'Vencido'
+        },
+        'unknown': {
+            class: 'inspection-badge-unknown',
+            icon: '?',
+            text: 'Sin datos'
+        }
+    };
+
+    const badge = badges[status] || badges['unknown'];
+    return `<span class="${badge.class}">${badge.icon} ${badge.text}</span>`;
+}
+
 // ===== DOM Elements =====
 // ===== DOM Elements =====
 let screens = {};
@@ -779,9 +865,15 @@ function generateReportHTML() {
 
     return `
         <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
-            <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #ff6b35, #004e89); color: white; border-radius: 10px;">
-                <h1 style="margin: 0; font-size: 24px;">INFORME DE INSPECCIÓN</h1>
-                <p style="margin: 10px 0 0 0; font-size: 18px;">${equipment.name}</p>
+            <!-- Header with Logo -->
+            <div style="text-align: center; margin-bottom: 30px; padding: 30px 20px; background: linear-gradient(135deg, #ff6b35, #004e89); color: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                <div style="margin-bottom: 15px;">
+                    <div style="background: white; width: 120px; height: 60px; margin: 0 auto; border-radius: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+                        <span style="color: #ff6b35; font-size: 20px; font-weight: 800;">RETIMBRASUR</span>
+                    </div>
+                </div>
+                <h1 style="margin: 15px 0 0 0; font-size: 26px; font-weight: 800; letter-spacing: 1px;">INFORME DE INSPECCIÓN</h1>
+                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.95;">${equipment.name}</p>
             </div>
             
             ${inspection.clientName ? `
@@ -977,24 +1069,95 @@ function generateReportHTML() {
                     </tbody>
                 </table>
             </div>
-            
+
+            ${inspection.photos && inspection.photos.length > 0 ? `
+                <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h3 style="margin: 0 0 15px 0; color: #333;">📸 Fotografías del Equipo (${inspection.photos.length})</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+                        ${inspection.photos.map((photo, index) => `
+                            <div style="position: relative; border: 2px solid #ddd; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                <img src="${photo}" style="width: 100%; height: auto; display: block;" alt="Foto ${index + 1}">
+                                <div style="position: absolute; bottom: 5px; right: 5px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                                    ${index + 1}/${inspection.photos.length}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : (inspection.photo ? `
+                <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h3 style="margin: 0 0 15px 0; color: #333;">📸 Fotografía del Equipo</h3>
+                    <div style="text-align: center;">
+                        <img src="${inspection.photo}" style="max-width: 100%; height: auto; border: 2px solid #ddd; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Foto del equipo">
+                    </div>
+                </div>
+            ` : '')}
+
             ${inspection.observations ? `
                 <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #f59e0b;">
                     <h3 style="margin: 0 0 10px 0; color: #333;">Observaciones</h3>
                     <p style="margin: 0; white-space: pre-wrap;">${inspection.observations}</p>
                 </div>
             ` : ''}
-            
+
             ${inspection.recommendations ? `
                 <div style="margin-bottom: 20px; padding: 15px; background: #dbeafe; border-radius: 8px; border-left: 4px solid #3b82f6;">
                     <h3 style="margin: 0 0 10px 0; color: #333;">Recomendaciones</h3>
                     <p style="margin: 0; white-space: pre-wrap;">${inspection.recommendations}</p>
                 </div>
             ` : ''}
-            
-            <div style="margin-top: 30px; padding: 15px; background: #f5f5f5; border-radius: 8px; text-align: center; font-size: 12px; color: #666;">
-                <p style="margin: 0;">Informe generado el ${formatDate(new Date())}</p>
-                <p style="margin: 5px 0 0 0;">Sistema de Inspección PCI - Protección Contra Incendios</p>
+
+            ${inspection.technicianSignature || inspection.clientSignature ? `
+                <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h3 style="margin: 0 0 15px 0; color: #333;">✍️ Firmas</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                        ${inspection.technicianSignature ? `
+                            <div style="text-align: center;">
+                                <p style="margin: 0 0 10px 0; font-weight: 600; color: #555;">Firma del Técnico</p>
+                                <div style="background: white; padding: 10px; border: 2px solid #ddd; border-radius: 8px;">
+                                    <img src="${inspection.technicianSignature}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" alt="Firma del técnico">
+                                </div>
+                            </div>
+                        ` : ''}
+                        ${inspection.clientSignature ? `
+                            <div style="text-align: center;">
+                                <p style="margin: 0 0 10px 0; font-weight: 600; color: #555;">Firma del Cliente</p>
+                                <div style="background: white; padding: 10px; border: 2px solid #ddd; border-radius: 8px;">
+                                    <img src="${inspection.clientSignature}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" alt="Firma del cliente">
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            ` : ''}
+
+            <!-- Professional Footer -->
+            <div style="margin-top: 40px; padding: 25px; background: linear-gradient(135deg, #1e293b, #334155); color: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0 0 5px 0; font-size: 18px; color: #ff6b35;">RETIMBRASUR</h3>
+                    <p style="margin: 0; font-size: 13px; opacity: 0.9;">Protección Contra Incendios - Inspección y Mantenimiento</p>
+                </div>
+                <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; font-size: 12px;">
+                    <div>
+                        <strong style="display: block; margin-bottom: 5px; color: #ff6b35;">📞 Contacto</strong>
+                        <p style="margin: 0; opacity: 0.9;">Tel: +34 XXX XXX XXX</p>
+                        <p style="margin: 3px 0 0 0; opacity: 0.9;">Email: info@retimbrasur.es</p>
+                    </div>
+                    <div>
+                        <strong style="display: block; margin-bottom: 5px; color: #ff6b35;">📍 Dirección</strong>
+                        <p style="margin: 0; opacity: 0.9;">Calle Ejemplo, 123</p>
+                        <p style="margin: 3px 0 0 0; opacity: 0.9;">28001 Madrid, España</p>
+                    </div>
+                    <div>
+                        <strong style="display: block; margin-bottom: 5px; color: #ff6b35;">📄 Documento</strong>
+                        <p style="margin: 0; opacity: 0.9;">Fecha: ${formatDate(new Date())}</p>
+                        <p style="margin: 3px 0 0 0; opacity: 0.9;">Sistema v1.0</p>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); font-size: 11px; opacity: 0.8;">
+                    <p style="margin: 0;">Este documento es confidencial y está destinado exclusivamente al cliente indicado.</p>
+                    <p style="margin: 5px 0 0 0;">© ${new Date().getFullYear()} RETIMBRASUR - Todos los derechos reservados</p>
+                </div>
             </div>
         </div>
     `;
@@ -1681,7 +1844,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ===== PHOTO CAPTURE FUNCTIONALITY =====
-    let currentPhotoData = null;
+    let currentPhotosArray = [];  // Changed from single photo to array
+    const MAX_PHOTOS = 5;
 
     // Function to compress image using Canvas API
     function compressImage(file, maxWidth = 1024, quality = 0.8) {
@@ -1757,49 +1921,100 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const photoInput = document.getElementById('equipmentPhoto');
-    const photoPreview = document.getElementById('photoPreview');
-    const photoPreviewImg = document.getElementById('photoPreviewImg');
-    const removePhotoBtn = document.getElementById('removePhoto');
+    const photosGallery = document.getElementById('photosGallery');
+    const addMorePhotosBtn = document.getElementById('addMorePhotosBtn');
 
+    // Render photos gallery
+    function renderPhotosGallery() {
+        if (!photosGallery) return;
+
+        if (currentPhotosArray.length === 0) {
+            photosGallery.style.display = 'none';
+            if (addMorePhotosBtn) addMorePhotosBtn.style.display = 'none';
+            return;
+        }
+
+        photosGallery.style.display = 'grid';
+        if (addMorePhotosBtn) {
+            addMorePhotosBtn.style.display = currentPhotosArray.length < MAX_PHOTOS ? 'inline-flex' : 'none';
+        }
+
+        photosGallery.innerHTML = currentPhotosArray.map((photoData, index) => `
+            <div class="photo-thumbnail" data-index="${index}">
+                <img src="${photoData}" alt="Foto ${index + 1}">
+                <button type="button" class="btn-remove-photo-thumb" data-index="${index}">✕</button>
+                <div class="photo-number-badge">${index + 1}/${currentPhotosArray.length}</div>
+            </div>
+        `).join('');
+
+        // Add remove listeners
+        photosGallery.querySelectorAll('.btn-remove-photo-thumb').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.dataset.index);
+                removePhoto(index);
+            });
+        });
+    }
+
+    // Remove photo at index
+    function removePhoto(index) {
+        currentPhotosArray.splice(index, 1);
+        renderPhotosGallery();
+        showToast('Foto eliminada', 'info');
+    }
+
+    // Add photo to array
+    async function addPhoto(file) {
+        if (currentPhotosArray.length >= MAX_PHOTOS) {
+            showToast(`Máximo ${MAX_PHOTOS} fotos permitidas`, 'warning');
+            return;
+        }
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            showToast('Por favor selecciona un archivo de imagen válido', 'error');
+            return;
+        }
+
+        // Show loading toast
+        showToast('Comprimiendo imagen...', 'info');
+
+        try {
+            // Compress the image
+            const compressed = await compressImage(file, 1024, 0.8);
+
+            currentPhotosArray.push(compressed.dataUrl);
+            renderPhotosGallery();
+
+            // Show success message with compression stats
+            const compressionMsg = `Imagen ${currentPhotosArray.length} agregada: ${(compressed.originalSize / 1024).toFixed(0)}KB → ${(compressed.compressedSize / 1024).toFixed(0)}KB (${compressed.compressionRatio}% reducción)`;
+            showToast(compressionMsg, 'success');
+
+            // Clear input
+            if (photoInput) photoInput.value = '';
+        } catch (error) {
+            showToast(error.message || 'Error al procesar la imagen', 'error');
+            if (photoInput) photoInput.value = '';
+        }
+    }
+
+    // Photo input event listener
     if (photoInput) {
         photoInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (file) {
-                // Validate file type
-                if (!file.type.startsWith('image/')) {
-                    showToast('Por favor selecciona un archivo de imagen válido', 'error');
-                    photoInput.value = '';
-                    return;
-                }
-
-                // Show loading toast
-                showToast('Comprimiendo imagen...', 'info');
-
-                try {
-                    // Compress the image
-                    const compressed = await compressImage(file, 1024, 0.8);
-
-                    currentPhotoData = compressed.dataUrl;
-                    photoPreviewImg.src = currentPhotoData;
-                    photoPreview.style.display = 'block';
-
-                    // Show success message with compression stats
-                    const compressionMsg = `Imagen comprimida: ${(compressed.originalSize / 1024).toFixed(0)}KB → ${(compressed.compressedSize / 1024).toFixed(0)}KB (${compressed.compressionRatio}% reducción)`;
-                    showToast(compressionMsg, 'success');
-                } catch (error) {
-                    showToast(error.message || 'Error al procesar la imagen', 'error');
-                    photoInput.value = '';
-                }
+                await addPhoto(file);
             }
         });
     }
 
-    if (removePhotoBtn) {
-        removePhotoBtn.addEventListener('click', () => {
-            currentPhotoData = null;
-            photoInput.value = '';
-            photoPreview.style.display = 'none';
-            photoPreviewImg.src = '';
+    // Add more photos button
+    if (addMorePhotosBtn) {
+        addMorePhotosBtn.addEventListener('click', () => {
+            if (photoInput) {
+                photoInput.click();
+            }
         });
     }
 
@@ -1899,26 +2114,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ===== INTEGRATE PHOTO WITH SAVE INSPECTION =====
+    // ===== INTEGRATE PHOTOS WITH SAVE INSPECTION =====
     const originalSaveInspection = window.saveInspection;
     window.saveInspection = function (status = 'draft') {
         // Call original function
         const result = originalSaveInspection.call(this, status);
 
-        // Add photo to the last saved inspection if available
-        if (currentPhotoData && inspections.length > 0) {
+        // Add photos to the last saved inspection if available
+        if (currentPhotosArray.length > 0 && inspections.length > 0) {
             const lastInspection = inspections[inspections.length - 1];
-            lastInspection.photo = currentPhotoData;
+            lastInspection.photos = [...currentPhotosArray];
+            // Keep first photo as legacy 'photo' for backward compatibility
+            lastInspection.photo = currentPhotosArray[0];
             localStorage.setItem('inspections', JSON.stringify(inspections));
         }
 
-        // Add photo to equipment if saving to center
+        // Add photos to equipment if saving to center
         const saveEquipmentCheck = document.getElementById('saveEquipmentCheck');
-        if (currentPhotoData && saveEquipmentCheck && saveEquipmentCheck.checked && currentWorkCenter) {
+        if (currentPhotosArray.length > 0 && saveEquipmentCheck && saveEquipmentCheck.checked && currentWorkCenter) {
             const equipmentId = document.getElementById('equipmentId').value;
             const equipment = getEquipmentById(currentWorkCenter.id, equipmentId);
             if (equipment) {
-                equipment.photo = currentPhotoData;
+                equipment.photos = [...currentPhotosArray];
+                // Keep first photo as legacy 'photo' for backward compatibility
+                equipment.photo = currentPhotosArray[0];
                 saveWorkCenter(currentWorkCenter);
             }
         }
@@ -2049,8 +2268,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 .filter(i => i.equipmentId === eq.id && i.workCenterId === centerId)
                 .sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0];
 
-            // Get photo from equipment or last inspection
-            const photoUrl = eq.photo || (lastInspection && lastInspection.photo) || null;
+            // Get photos from equipment or last inspection
+            const photos = eq.photos || (lastInspection && lastInspection.photos) || (eq.photo ? [eq.photo] : (lastInspection && lastInspection.photo ? [lastInspection.photo] : []));
+            const photoUrl = photos.length > 0 ? photos[0] : null;
+            const photoCount = photos.length;
+
+            // Calculate inspection reminder status
+            let reminderBadge = '';
+            if (lastInspection && lastInspection.inspectionDate) {
+                const nextInspectionDate = calculateNextInspection(lastInspection.inspectionDate, eq.type);
+                if (nextInspectionDate) {
+                    const status = getInspectionStatus(nextInspectionDate);
+                    const daysUntil = getDaysUntilInspection(nextInspectionDate);
+                    reminderBadge = getInspectionStatusBadge(status, daysUntil);
+                }
+            }
 
             return `
                 <div class="equipment-card saved-equipment" data-equipment-id="${eq.id}" data-type="${eq.type}">
@@ -2059,11 +2291,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${photoUrl ? `
                         <div class="equipment-photo-preview">
                             <img src="${photoUrl}" alt="Foto del equipo">
+                            ${photoCount > 1 ? `<div class="photo-count-badge">📷 ${photoCount}</div>` : ''}
                         </div>
                     ` : `
                         <div class="equipment-photo-placeholder">
                             <span class="placeholder-icon">📷</span>
-                            <span class="placeholder-text">Sin foto</span>
+                            <span class="placeholder-text">Sin fotos</span>
                         </div>
                     `}
 
@@ -2076,9 +2309,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${lastInspection ? `
                             <div class="last-inspection">
                                 <p><strong>Última inspección:</strong> ${new Date(lastInspection.inspectionDate).toLocaleDateString()}</p>
-                                <p><strong>Estado:</strong> <span class="status-${lastInspection.status}">${lastInspection.status === 'completed' ? 'Completada' : 'Borrador'}</span></p>
+                                ${reminderBadge ? `<p style="margin-top: 8px;">${reminderBadge}</p>` : ''}
                             </div>
-                        ` : ''}
+                        ` : `<p style="margin-top: 10px;">${getInspectionStatusBadge('unknown', null)}</p>`}
                     </div>
                     <button class="btn btn-primary btn-sm inspect-equipment-btn" data-equipment-id="${eq.id}">
                         Inspeccionar
@@ -2213,7 +2446,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Make function globally available
     window.generateCenterReport = generateCenterReport;
 
-    // ===== RESET INSPECTION FORM TO CLEAR PHOTO =====
+    // ===== RESET INSPECTION FORM TO CLEAR PHOTOS =====
     const originalResetInspectionForm = window.resetInspectionForm;
     window.resetInspectionForm = function () {
         // Call original function
@@ -2221,25 +2454,31 @@ document.addEventListener('DOMContentLoaded', () => {
             originalResetInspectionForm.call(this);
         }
 
-        // Reset photo
-        currentPhotoData = null;
+        // Reset photos array
+        currentPhotosArray = [];
         if (photoInput) photoInput.value = '';
-        if (photoPreview) photoPreview.style.display = 'none';
-        if (photoPreviewImg) photoPreviewImg.src = '';
+        renderPhotosGallery();
     };
 
-    // ===== START INSPECTION WITH EQUIPMENT TO LOAD PHOTO =====
+    // ===== START INSPECTION WITH EQUIPMENT TO LOAD PHOTOS =====
     const originalStartInspectionWithEquipment = window.startInspectionWithEquipment;
     window.startInspectionWithEquipment = function (equipmentId, type) {
         // Call original function
         originalStartInspectionWithEquipment.call(this, equipmentId, type);
 
-        // Load photo if available
+        // Load photos if available
         const equipment = getEquipmentById(currentWorkCenter.id, equipmentId);
-        if (equipment && equipment.photo) {
-            currentPhotoData = equipment.photo;
-            if (photoPreviewImg) photoPreviewImg.src = currentPhotoData;
-            if (photoPreview) photoPreview.style.display = 'block';
+        if (equipment) {
+            // Use photos array if available, otherwise migrate from single photo
+            if (equipment.photos && Array.isArray(equipment.photos)) {
+                currentPhotosArray = [...equipment.photos];
+            } else if (equipment.photo) {
+                // Migrate single photo to array
+                currentPhotosArray = [equipment.photo];
+            } else {
+                currentPhotosArray = [];
+            }
+            renderPhotosGallery();
         }
 
         // Update button visibility
@@ -2247,4 +2486,914 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     console.log('Multi-equipment workflow and photo integration initialized');
+
+    // ===== STATISTICS SCREEN =====
+    const viewStatisticsBtn = document.getElementById('viewStatisticsBtn');
+    const backFromStatsBtn = document.getElementById('backFromStatsBtn');
+
+    if (viewStatisticsBtn) {
+        viewStatisticsBtn.addEventListener('click', () => {
+            if (currentWorkCenter) {
+                generateStatistics(currentWorkCenter.id);
+                showScreen('statisticsScreen');
+            }
+        });
+    }
+
+    if (backFromStatsBtn) {
+        backFromStatsBtn.addEventListener('click', () => {
+            showScreen('welcome');
+        });
+    }
+
+    // Update screens object to include statistics
+    screens.statisticsScreen = document.getElementById('statisticsScreen');
+
+    // Generate statistics for a work center
+    function generateStatistics(centerId) {
+        const center = getWorkCenter(centerId);
+        const equipment = getEquipmentByCenter(centerId);
+        const centerInspections = inspections.filter(i => i.workCenterId === centerId && i.status === 'completed');
+
+        // Update subtitle
+        document.getElementById('statsSubtitle').textContent = center ? center.name : 'Análisis y métricas';
+
+        // Calculate statistics
+        const totalEquipment = equipment.length;
+        const totalInspections = centerInspections.length;
+
+        // Equipment with at least one inspection
+        const inspectedEquipmentIds = new Set(centerInspections.map(i => i.equipmentId));
+        const pendingEquipment = equipment.filter(eq => !inspectedEquipmentIds.has(eq.id));
+        const pendingCount = pendingEquipment.length;
+
+        // Last inspection date
+        const lastInspection = centerInspections.length > 0
+            ? centerInspections.sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0]
+            : null;
+        const lastInspectionDate = lastInspection
+            ? new Date(lastInspection.inspectionDate).toLocaleDateString('es-ES')
+            : '-';
+
+        // Update summary cards
+        document.getElementById('totalEquipmentCount').textContent = totalEquipment;
+        document.getElementById('totalInspectionsCount').textContent = totalInspections;
+        document.getElementById('pendingEquipmentCount').textContent = pendingCount;
+        document.getElementById('lastInspectionDate').textContent = lastInspectionDate;
+
+        // Equipment by type chart
+        const equipmentByType = {};
+        equipment.forEach(eq => {
+            const typeName = equipmentTypes[eq.type] ? equipmentTypes[eq.type].name : eq.type;
+            equipmentByType[typeName] = (equipmentByType[typeName] || 0) + 1;
+        });
+
+        renderEquipmentTypeChart(equipmentByType);
+
+        // Inspection status chart
+        const inspectionStatusData = {
+            'Con Inspección': totalEquipment - pendingCount,
+            'Sin Inspección': pendingCount
+        };
+
+        renderInspectionStatusChart(inspectionStatusData);
+
+        // Pending equipment list
+        renderPendingEquipmentList(pendingEquipment);
+    }
+
+    // Render equipment type chart
+    let equipmentTypeChartInstance = null;
+    function renderEquipmentTypeChart(data) {
+        const ctx = document.getElementById('equipmentTypeChart');
+        if (!ctx) return;
+
+        // Destroy previous chart if exists
+        if (equipmentTypeChartInstance) {
+            equipmentTypeChartInstance.destroy();
+        }
+
+        const labels = Object.keys(data);
+        const values = Object.values(data);
+
+        const colors = [
+            'rgba(255, 107, 53, 0.8)',
+            'rgba(0, 78, 137, 0.8)',
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(245, 158, 11, 0.8)',
+            'rgba(139, 92, 246, 0.8)',
+            'rgba(236, 72, 153, 0.8)',
+            'rgba(59, 130, 246, 0.8)',
+            'rgba(34, 197, 94, 0.8)',
+            'rgba(251, 146, 60, 0.8)',
+            'rgba(168, 85, 247, 0.8)'
+        ];
+
+        equipmentTypeChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#f8fafc',
+                            font: {
+                                size: 12
+                            },
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${label}: ${value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Render inspection status chart
+    let inspectionStatusChartInstance = null;
+    function renderInspectionStatusChart(data) {
+        const ctx = document.getElementById('inspectionStatusChart');
+        if (!ctx) return;
+
+        // Destroy previous chart if exists
+        if (inspectionStatusChartInstance) {
+            inspectionStatusChartInstance.destroy();
+        }
+
+        const labels = Object.keys(data);
+        const values = Object.values(data);
+
+        inspectionStatusChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Cantidad',
+                    data: values,
+                    backgroundColor: [
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)'
+                    ],
+                    borderColor: [
+                        'rgba(16, 185, 129, 1)',
+                        'rgba(245, 158, 11, 1)'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Equipos: ${context.parsed.y}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#94a3b8',
+                            stepSize: 1
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#94a3b8'
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Render pending equipment list
+    function renderPendingEquipmentList(pendingEquipment) {
+        const container = document.getElementById('pendingEquipmentList');
+        if (!container) return;
+
+        if (pendingEquipment.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">✓</div>
+                    <h4>¡Excelente!</h4>
+                    <p>Todos los equipos han sido inspeccionados</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = pendingEquipment.map(eq => {
+            const typeInfo = equipmentTypes[eq.type];
+            return `
+                <div class="pending-item">
+                    <div class="pending-item-info">
+                        <strong>${typeInfo ? typeInfo.icon : '🔧'} ${typeInfo ? typeInfo.name : eq.type} - ${eq.id}</strong>
+                        <p>📍 ${eq.location || 'Ubicación no especificada'}</p>
+                    </div>
+                    <div class="pending-badge">Sin inspeccionar</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Update loadEquipmentList to show/hide statistics button
+    const originalLoadEquipmentListForStats = window.loadEquipmentList;
+    window.loadEquipmentList = function(centerId) {
+        // Call original function
+        if (originalLoadEquipmentListForStats) {
+            originalLoadEquipmentListForStats.call(this, centerId);
+        }
+
+        // Show/hide statistics button
+        const statsBtn = document.getElementById('viewStatisticsBtn');
+        const equipment = getEquipmentByCenter(centerId);
+        if (statsBtn) {
+            statsBtn.style.display = equipment.length > 0 ? 'inline-flex' : 'none';
+        }
+    };
+
+    console.log('Statistics functionality initialized');
+
+    // ===== DIGITAL SIGNATURES =====
+    let technicianSignatureData = null;
+    let clientSignatureData = null;
+
+    const techCanvas = document.getElementById('technicianSignature');
+    const clientCanvas = document.getElementById('clientSignature');
+    const clearTechBtn = document.getElementById('clearTechnicianSignature');
+    const clearClientBtn = document.getElementById('clearClientSignature');
+    const techPlaceholder = document.getElementById('techPlaceholder');
+    const clientPlaceholder = document.getElementById('clientPlaceholder');
+
+    // Signature pad class
+    class SignaturePad {
+        constructor(canvas, placeholder) {
+            this.canvas = canvas;
+            this.context = canvas.getContext('2d');
+            this.placeholder = placeholder;
+            this.isDrawing = false;
+            this.hasDrawn = false;
+
+            // Set canvas size properly
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            // Configure context
+            this.context.strokeStyle = '#000000';
+            this.context.lineWidth = 2;
+            this.context.lineCap = 'round';
+            this.context.lineJoin = 'round';
+
+            this.setupEventListeners();
+        }
+
+        setupEventListeners() {
+            // Mouse events
+            this.canvas.addEventListener('mousedown', this.startDrawing.bind(this));
+            this.canvas.addEventListener('mousemove', this.draw.bind(this));
+            this.canvas.addEventListener('mouseup', this.stopDrawing.bind(this));
+            this.canvas.addEventListener('mouseout', this.stopDrawing.bind(this));
+
+            // Touch events
+            this.canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const mouseEvent = new MouseEvent('mousedown', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                this.canvas.dispatchEvent(mouseEvent);
+            });
+
+            this.canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const mouseEvent = new MouseEvent('mousemove', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                this.canvas.dispatchEvent(mouseEvent);
+            });
+
+            this.canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                const mouseEvent = new MouseEvent('mouseup', {});
+                this.canvas.dispatchEvent(mouseEvent);
+            });
+        }
+
+        startDrawing(e) {
+            this.isDrawing = true;
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            this.context.beginPath();
+            this.context.moveTo(x, y);
+        }
+
+        draw(e) {
+            if (!this.isDrawing) return;
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            this.context.lineTo(x, y);
+            this.context.stroke();
+
+            if (!this.hasDrawn) {
+                this.hasDrawn = true;
+                if (this.placeholder) this.placeholder.classList.add('hidden');
+                this.canvas.parentElement.classList.add('signed');
+            }
+        }
+
+        stopDrawing() {
+            if (this.isDrawing) {
+                this.isDrawing = false;
+                this.context.closePath();
+            }
+        }
+
+        clear() {
+            this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.hasDrawn = false;
+            if (this.placeholder) this.placeholder.classList.remove('hidden');
+            this.canvas.parentElement.classList.remove('signed');
+        }
+
+        getDataURL() {
+            return this.hasDrawn ? this.canvas.toDataURL('image/png') : null;
+        }
+
+        isEmpty() {
+            return !this.hasDrawn;
+        }
+    }
+
+    // Initialize signature pads
+    let techSignaturePad = null;
+    let clientSignaturePad = null;
+
+    if (techCanvas && clientCanvas) {
+        techSignaturePad = new SignaturePad(techCanvas, techPlaceholder);
+        clientSignaturePad = new SignaturePad(clientCanvas, clientPlaceholder);
+
+        // Clear buttons
+        if (clearTechBtn) {
+            clearTechBtn.addEventListener('click', () => {
+                techSignaturePad.clear();
+                technicianSignatureData = null;
+                showToast('Firma del técnico borrada', 'info');
+            });
+        }
+
+        if (clearClientBtn) {
+            clearClientBtn.addEventListener('click', () => {
+                clientSignaturePad.clear();
+                clientSignatureData = null;
+                showToast('Firma del cliente borrada', 'info');
+            });
+        }
+
+        // Integrate signatures with saveInspection
+        const originalSaveInspectionWithSignatures = window.saveInspection;
+        window.saveInspection = function(status = 'draft') {
+            // Get signature data
+            if (techSignaturePad && !techSignaturePad.isEmpty()) {
+                technicianSignatureData = techSignaturePad.getDataURL();
+            }
+            if (clientSignaturePad && !clientSignaturePad.isEmpty()) {
+                clientSignatureData = clientSignaturePad.getDataURL();
+            }
+
+            // Call original function
+            const result = originalSaveInspectionWithSignatures.call(this, status);
+
+            // Add signatures to last inspection
+            if (inspections.length > 0) {
+                const lastInspection = inspections[inspections.length - 1];
+                if (technicianSignatureData) lastInspection.technicianSignature = technicianSignatureData;
+                if (clientSignatureData) lastInspection.clientSignature = clientSignatureData;
+                localStorage.setItem('inspections', JSON.stringify(inspections));
+            }
+
+            return result;
+        };
+
+        // Clear signatures on reset
+        const originalResetWithSignatures = window.resetInspectionForm;
+        window.resetInspectionForm = function() {
+            if (originalResetWithSignatures) originalResetWithSignatures.call(this);
+            if (techSignaturePad) techSignaturePad.clear();
+            if (clientSignaturePad) clientSignaturePad.clear();
+            technicianSignatureData = null;
+            clientSignatureData = null;
+        };
+
+        console.log('Digital signatures initialized');
+    }
+});
+
+// ===== AppSheet Synchronization Module =====
+document.addEventListener('DOMContentLoaded', () => {
+    // AppSheet API Configuration
+    const APPSHEET_CONFIG = {
+        apiUrl: '', // TO BE CONFIGURED: AppSheet API endpoint
+        appId: '', // TO BE CONFIGURED: AppSheet App ID
+        apiKey: '', // TO BE CONFIGURED: AppSheet API Key
+        tableName: 'Inspecciones', // Table name in AppSheet
+        photosTableName: 'Fotos', // Photos table in AppSheet
+        driveFolder: 'RETIMBRASUR_Photos', // Google Drive folder for photos
+        maxRetries: 3,
+        retryDelay: 2000 // 2 seconds
+    };
+
+    // Sync status tracking
+    let syncStatus = {
+        isSyncing: false,
+        lastSync: localStorage.getItem('lastSyncDate') || null,
+        pendingSync: JSON.parse(localStorage.getItem('pendingSync')) || [],
+        errors: []
+    };
+
+    // Create sync button in header
+    function createSyncButton() {
+        const headerActions = document.querySelector('.header-actions');
+        if (!headerActions) return;
+
+        const syncBtn = document.createElement('button');
+        syncBtn.id = 'syncAppSheetBtn';
+        syncBtn.className = 'btn btn-secondary';
+        syncBtn.innerHTML = `
+            <span class="icon">🔄</span>
+            <span class="sync-text">Sincronizar</span>
+        `;
+        syncBtn.title = 'Sincronizar con AppSheet';
+
+        // Add sync status indicator
+        const syncIndicator = document.createElement('span');
+        syncIndicator.id = 'syncIndicator';
+        syncIndicator.className = 'sync-indicator';
+        syncIndicator.style.cssText = `
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ccc;
+            border: 2px solid white;
+        `;
+        syncBtn.style.position = 'relative';
+        syncBtn.appendChild(syncIndicator);
+
+        // Insert before export button
+        const exportBtn = document.getElementById('exportBtn');
+        if (exportBtn) {
+            headerActions.insertBefore(syncBtn, exportBtn);
+        } else {
+            headerActions.appendChild(syncBtn);
+        }
+
+        // Update sync indicator
+        updateSyncIndicator();
+
+        // Sync button click handler
+        syncBtn.addEventListener('click', async () => {
+            await syncWithAppSheet();
+        });
+
+        return syncBtn;
+    }
+
+    // Update sync indicator color
+    function updateSyncIndicator() {
+        const indicator = document.getElementById('syncIndicator');
+        if (!indicator) return;
+
+        const pendingCount = syncStatus.pendingSync.length;
+
+        if (syncStatus.isSyncing) {
+            indicator.style.background = '#2196F3'; // Blue - syncing
+            indicator.style.animation = 'pulse 1.5s infinite';
+        } else if (pendingCount > 0) {
+            indicator.style.background = '#ff9800'; // Orange - pending
+            indicator.title = `${pendingCount} inspecciones pendientes de sincronizar`;
+        } else {
+            indicator.style.background = '#4caf50'; // Green - synced
+            indicator.title = syncStatus.lastSync ? `Última sincronización: ${new Date(syncStatus.lastSync).toLocaleString()}` : 'Sin sincronizar';
+        }
+    }
+
+    // Upload photo to Google Drive via AppSheet
+    async function uploadPhotoToGoogleDrive(photoBase64, fileName, retryCount = 0) {
+        if (!APPSHEET_CONFIG.apiUrl || !APPSHEET_CONFIG.apiKey) {
+            console.warn('AppSheet no configurado. Las fotos se guardarán solo localmente.');
+            return { success: false, url: null, localOnly: true };
+        }
+
+        try {
+            // Convert base64 to blob
+            const response = await fetch(photoBase64);
+            const blob = await response.blob();
+
+            // Create FormData for upload
+            const formData = new FormData();
+            formData.append('file', blob, fileName);
+            formData.append('folder', APPSHEET_CONFIG.driveFolder);
+
+            // Upload to AppSheet/Google Drive
+            const uploadResponse = await fetch(`${APPSHEET_CONFIG.apiUrl}/uploadPhoto`, {
+                method: 'POST',
+                headers: {
+                    'ApplicationAccessKey': APPSHEET_CONFIG.apiKey,
+                    'AppId': APPSHEET_CONFIG.appId
+                },
+                body: formData
+            });
+
+            if (!uploadResponse.ok) {
+                throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+            }
+
+            const result = await uploadResponse.json();
+
+            return {
+                success: true,
+                url: result.url || result.fileUrl,
+                driveId: result.fileId
+            };
+
+        } catch (error) {
+            console.error('Error uploading photo:', error);
+
+            // Retry logic
+            if (retryCount < APPSHEET_CONFIG.maxRetries) {
+                console.log(`Retrying upload (${retryCount + 1}/${APPSHEET_CONFIG.maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, APPSHEET_CONFIG.retryDelay * (retryCount + 1)));
+                return uploadPhotoToGoogleDrive(photoBase64, fileName, retryCount + 1);
+            }
+
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    // Upload multiple photos
+    async function uploadInspectionPhotos(inspection) {
+        const photoUrls = [];
+
+        // Handle single photo (legacy)
+        if (inspection.photo) {
+            const fileName = `${inspection.equipmentType}_${inspection.equipmentId}_${Date.now()}.jpg`;
+            const result = await uploadPhotoToGoogleDrive(inspection.photo, fileName);
+            if (result.success) {
+                photoUrls.push(result.url);
+            }
+        }
+
+        // Handle multiple photos
+        if (inspection.photos && Array.isArray(inspection.photos)) {
+            for (let i = 0; i < inspection.photos.length; i++) {
+                const photo = inspection.photos[i];
+                const fileName = `${inspection.equipmentType}_${inspection.equipmentId}_${i + 1}_${Date.now()}.jpg`;
+                const result = await uploadPhotoToGoogleDrive(photo, fileName);
+                if (result.success) {
+                    photoUrls.push(result.url);
+                }
+            }
+        }
+
+        return photoUrls;
+    }
+
+    // Sync single inspection to AppSheet
+    async function syncInspection(inspection, retryCount = 0) {
+        if (!APPSHEET_CONFIG.apiUrl || !APPSHEET_CONFIG.apiKey) {
+            console.warn('AppSheet no configurado. Los datos se mantendrán solo localmente.');
+            return { success: false, localOnly: true };
+        }
+
+        try {
+            // Upload photos first
+            const photoUrls = await uploadInspectionPhotos(inspection);
+
+            // Prepare inspection data for AppSheet
+            const appSheetData = {
+                ID: inspection.id,
+                WorkCenterId: inspection.workCenterId,
+                WorkCenterName: inspection.workCenterName,
+                EquipmentType: inspection.equipmentType,
+                EquipmentId: inspection.equipmentId,
+                Location: inspection.location,
+                InspectionDate: inspection.inspectionDate,
+                Technician: inspection.technician,
+                TechnicianId: inspection.technicianId || '',
+
+                // Equipment details
+                Manufacturer: inspection.manufacturer || '',
+                Brand: inspection.brand || '',
+                Model: inspection.model || '',
+                ManufacturingDate: inspection.manufacturingDate || '',
+                LastRetestDate: inspection.lastRetestDate || '',
+
+                // Checklist results
+                TotalItems: inspection.checklist.length,
+                CheckedItems: inspection.checklist.filter(i => i.checked).length,
+                OkCount: inspection.checklist.filter(i => i.status === 'ok').length,
+                WarningCount: inspection.checklist.filter(i => i.status === 'warning').length,
+                ErrorCount: inspection.checklist.filter(i => i.status === 'error').length,
+                CompletionPercentage: Math.round((inspection.checklist.filter(i => i.checked).length / inspection.checklist.length) * 100),
+
+                // Checklist JSON
+                ChecklistData: JSON.stringify(inspection.checklist),
+
+                // Text fields
+                Observations: inspection.observations || '',
+                Recommendations: inspection.recommendations || '',
+
+                // Photos
+                PhotoUrls: photoUrls.join(','),
+                PhotoCount: photoUrls.length,
+
+                // Signatures
+                TechnicianSignature: inspection.technicianSignature || '',
+                ClientSignature: inspection.clientSignature || '',
+
+                // Metadata
+                Status: inspection.status,
+                CreatedAt: inspection.createdAt,
+                UpdatedAt: new Date().toISOString(),
+                SyncedAt: new Date().toISOString()
+            };
+
+            // Send to AppSheet API
+            const response = await fetch(`${APPSHEET_CONFIG.apiUrl}/tables/${APPSHEET_CONFIG.tableName}/Action`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ApplicationAccessKey': APPSHEET_CONFIG.apiKey,
+                    'AppId': APPSHEET_CONFIG.appId
+                },
+                body: JSON.stringify({
+                    Action: 'Add',
+                    Properties: {},
+                    Rows: [appSheetData]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`AppSheet API error: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+
+            // Mark as synced in local storage
+            const inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+            const inspectionIndex = inspections.findIndex(i => i.id === inspection.id);
+            if (inspectionIndex !== -1) {
+                inspections[inspectionIndex].synced = true;
+                inspections[inspectionIndex].syncedAt = new Date().toISOString();
+                localStorage.setItem('inspections', JSON.stringify(inspections));
+            }
+
+            return {
+                success: true,
+                result: result
+            };
+
+        } catch (error) {
+            console.error('Error syncing inspection:', error);
+
+            // Retry logic
+            if (retryCount < APPSHEET_CONFIG.maxRetries) {
+                console.log(`Retrying sync (${retryCount + 1}/${APPSHEET_CONFIG.maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, APPSHEET_CONFIG.retryDelay * (retryCount + 1)));
+                return syncInspection(inspection, retryCount + 1);
+            }
+
+            // Add to pending sync queue
+            if (!syncStatus.pendingSync.find(p => p.id === inspection.id)) {
+                syncStatus.pendingSync.push({
+                    id: inspection.id,
+                    timestamp: new Date().toISOString(),
+                    error: error.message
+                });
+                localStorage.setItem('pendingSync', JSON.stringify(syncStatus.pendingSync));
+            }
+
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    // Main sync function - sync all unsynced inspections
+    async function syncWithAppSheet() {
+        if (syncStatus.isSyncing) {
+            showToast('Ya hay una sincronización en curso', 'warning');
+            return;
+        }
+
+        // Check if AppSheet is configured
+        if (!APPSHEET_CONFIG.apiUrl || !APPSHEET_CONFIG.apiKey) {
+            showToast('AppSheet no está configurado. Configure las credenciales en el código.', 'error');
+            console.warn('Para configurar AppSheet, edite APPSHEET_CONFIG en app.js');
+            return;
+        }
+
+        // Check internet connection
+        if (!navigator.onLine) {
+            showToast('Sin conexión a Internet. La sincronización se realizará cuando esté conectado.', 'warning');
+            return;
+        }
+
+        syncStatus.isSyncing = true;
+        updateSyncIndicator();
+
+        const syncBtn = document.getElementById('syncAppSheetBtn');
+        if (syncBtn) {
+            syncBtn.disabled = true;
+            const syncText = syncBtn.querySelector('.sync-text');
+            if (syncText) syncText.textContent = 'Sincronizando...';
+        }
+
+        try {
+            // Get all inspections
+            const inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+
+            // Filter unsynced inspections
+            const unsyncedInspections = inspections.filter(i => !i.synced);
+
+            if (unsyncedInspections.length === 0) {
+                showToast('Todas las inspecciones están sincronizadas', 'success');
+                syncStatus.isSyncing = false;
+                updateSyncIndicator();
+                if (syncBtn) {
+                    syncBtn.disabled = false;
+                    const syncText = syncBtn.querySelector('.sync-text');
+                    if (syncText) syncText.textContent = 'Sincronizar';
+                }
+                return;
+            }
+
+            showToast(`Sincronizando ${unsyncedInspections.length} inspecciones...`, 'info');
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            // Sync each inspection
+            for (const inspection of unsyncedInspections) {
+                const result = await syncInspection(inspection);
+                if (result.success) {
+                    successCount++;
+                    // Remove from pending queue
+                    syncStatus.pendingSync = syncStatus.pendingSync.filter(p => p.id !== inspection.id);
+                } else if (!result.localOnly) {
+                    errorCount++;
+                }
+
+                // Update progress
+                const progress = Math.round(((successCount + errorCount) / unsyncedInspections.length) * 100);
+                if (syncBtn) {
+                    const syncText = syncBtn.querySelector('.sync-text');
+                    if (syncText) syncText.textContent = `${progress}%`;
+                }
+            }
+
+            // Update sync status
+            syncStatus.lastSync = new Date().toISOString();
+            syncStatus.isSyncing = false;
+            localStorage.setItem('lastSyncDate', syncStatus.lastSync);
+            localStorage.setItem('pendingSync', JSON.stringify(syncStatus.pendingSync));
+
+            // Show result
+            if (errorCount === 0) {
+                showToast(`✅ ${successCount} inspecciones sincronizadas correctamente`, 'success');
+            } else {
+                showToast(`⚠️ ${successCount} sincronizadas, ${errorCount} con errores`, 'warning');
+            }
+
+        } catch (error) {
+            console.error('Sync error:', error);
+            showToast('Error durante la sincronización: ' + error.message, 'error');
+            syncStatus.errors.push({
+                timestamp: new Date().toISOString(),
+                error: error.message
+            });
+        } finally {
+            syncStatus.isSyncing = false;
+            updateSyncIndicator();
+
+            if (syncBtn) {
+                syncBtn.disabled = false;
+                const syncText = syncBtn.querySelector('.sync-text');
+                if (syncText) syncText.textContent = 'Sincronizar';
+            }
+        }
+    }
+
+    // Auto-sync when completing an inspection
+    const originalSaveInspection = window.saveInspection;
+    if (originalSaveInspection) {
+        window.saveInspection = async function(status) {
+            const result = originalSaveInspection.call(this, status);
+
+            // Auto-sync if online and configured
+            if (navigator.onLine && APPSHEET_CONFIG.apiUrl && APPSHEET_CONFIG.apiKey) {
+                // Get the last inspection
+                const inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+                if (inspections.length > 0) {
+                    const lastInspection = inspections[inspections.length - 1];
+
+                    // Sync in background
+                    setTimeout(async () => {
+                        const syncResult = await syncInspection(lastInspection);
+                        if (syncResult.success) {
+                            showToast('Inspección sincronizada con AppSheet', 'success');
+                            updateSyncIndicator();
+                        }
+                    }, 1000);
+                }
+            }
+
+            return result;
+        };
+    }
+
+    // Background sync via Service Worker
+    if ('serviceWorker' in navigator && 'sync' in self.registration) {
+        // Register background sync when going offline
+        window.addEventListener('offline', () => {
+            navigator.serviceWorker.ready.then((registration) => {
+                return registration.sync.register('sync-inspections');
+            }).catch((error) => {
+                console.log('Background sync registration failed:', error);
+            });
+        });
+
+        // Sync when coming back online
+        window.addEventListener('online', () => {
+            setTimeout(() => {
+                syncWithAppSheet();
+            }, 2000);
+        });
+    }
+
+    // Initialize sync button
+    createSyncButton();
+
+    // Add pulse animation for sync indicator
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Make sync function available globally
+    window.syncWithAppSheet = syncWithAppSheet;
+
+    console.log('AppSheet synchronization module initialized');
+    console.log('Configure APPSHEET_CONFIG in app.js to enable synchronization');
 });
