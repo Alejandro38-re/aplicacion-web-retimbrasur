@@ -1833,6 +1833,346 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// ===== OCR Plate Scanner =====
+document.addEventListener('DOMContentLoaded', () => {
+    const scanPlateBtn = document.getElementById('scanPlateBtn');
+    const ocrModal = document.getElementById('ocrPlateModal');
+    const closeOCRModal = document.getElementById('closeOCRModal');
+    const cancelOCRBtn = document.getElementById('cancelOCRBtn');
+    const capturePhotoBtn = document.getElementById('capturePhotoBtn');
+    const retryOCRBtn = document.getElementById('retryOCRBtn');
+
+    const cameraPreview = document.getElementById('ocrCameraPreview');
+    const captureCanvas = document.getElementById('ocrCaptureCanvas');
+    const cameraPlaceholder = document.getElementById('ocrCameraPlaceholder');
+
+    const ocrProcessing = document.getElementById('ocrProcessing');
+    const ocrResults = document.getElementById('ocrResults');
+    const ocrError = document.getElementById('ocrError');
+    const ocrStatus = document.getElementById('ocrStatus');
+    const ocrExtractedText = document.getElementById('ocrExtractedText');
+    const ocrErrorText = document.getElementById('ocrErrorText');
+
+    let cameraStream = null;
+    let capturedImageData = null;
+
+    // Open OCR Modal
+    if (scanPlateBtn) {
+        scanPlateBtn.addEventListener('click', async () => {
+            ocrModal.classList.add('active');
+            resetOCRModal();
+            await startCamera();
+        });
+    }
+
+    // Close OCR Modal
+    [closeOCRModal, cancelOCRBtn].forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', () => {
+                stopCamera();
+                ocrModal.classList.remove('active');
+            });
+        }
+    });
+
+    // Capture Photo
+    if (capturePhotoBtn) {
+        capturePhotoBtn.addEventListener('click', async () => {
+            if (!cameraStream) {
+                showToast('Cámara no disponible', 'error');
+                return;
+            }
+
+            try {
+                // Capture frame from video
+                const canvas = captureCanvas;
+                const ctx = canvas.getContext('2d');
+
+                canvas.width = cameraPreview.videoWidth;
+                canvas.height = cameraPreview.videoHeight;
+
+                ctx.drawImage(cameraPreview, 0, 0, canvas.width, canvas.height);
+
+                // Show captured image
+                cameraPreview.style.display = 'none';
+                canvas.style.display = 'block';
+                capturePhotoBtn.style.display = 'none';
+
+                // Get image data
+                capturedImageData = canvas.toDataURL('image/png');
+
+                // Stop camera
+                stopCamera();
+
+                // Process with OCR
+                await processOCR(capturedImageData);
+
+            } catch (error) {
+                console.error('Error capturing photo:', error);
+                showOCRError('Error al capturar la foto');
+            }
+        });
+    }
+
+    // Retry OCR
+    if (retryOCRBtn) {
+        retryOCRBtn.addEventListener('click', async () => {
+            resetOCRModal();
+            await startCamera();
+        });
+    }
+
+    // Start Camera
+    async function startCamera() {
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('Cámara no soportada en este navegador');
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' }, // Prefer back camera
+                audio: false
+            });
+
+            cameraStream = stream;
+            cameraPreview.srcObject = stream;
+            cameraPreview.style.display = 'block';
+            cameraPlaceholder.style.display = 'none';
+            capturePhotoBtn.style.display = 'block';
+
+        } catch (error) {
+            console.error('Error starting camera:', error);
+            showOCRError('No se pudo acceder a la cámara. Verifica los permisos.');
+        }
+    }
+
+    // Stop Camera
+    function stopCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+    }
+
+    // Process OCR
+    async function processOCR(imageData) {
+        try {
+            // Check if Tesseract is loaded
+            if (typeof Tesseract === 'undefined') {
+                throw new Error('Librería OCR no disponible');
+            }
+
+            // Show processing status
+            ocrProcessing.style.display = 'block';
+            ocrResults.style.display = 'none';
+            ocrError.style.display = 'none';
+            retryOCRBtn.style.display = 'none';
+
+            ocrStatus.textContent = 'Inicializando OCR...';
+
+            // Run Tesseract OCR
+            const worker = await Tesseract.createWorker('spa', 1, {
+                logger: (m) => {
+                    if (m.status === 'recognizing text') {
+                        const progress = Math.round(m.progress * 100);
+                        ocrStatus.textContent = `Reconociendo texto... ${progress}%`;
+                    }
+                }
+            });
+
+            const { data } = await worker.recognize(imageData);
+            await worker.terminate();
+
+            const extractedText = data.text.trim();
+
+            if (!extractedText) {
+                throw new Error('No se detectó texto en la imagen');
+            }
+
+            // Show results
+            ocrProcessing.style.display = 'none';
+            ocrResults.style.display = 'block';
+            ocrExtractedText.textContent = extractedText;
+            retryOCRBtn.style.display = 'inline-flex';
+
+            // Parse and fill form
+            parseAndFillForm(extractedText);
+
+            showToast('✓ Texto extraído correctamente', 'success');
+
+        } catch (error) {
+            console.error('OCR Error:', error);
+            ocrProcessing.style.display = 'none';
+            showOCRError(error.message || 'Error al procesar la imagen');
+            retryOCRBtn.style.display = 'inline-flex';
+        }
+    }
+
+    // Parse extracted text and fill form fields
+    function parseAndFillForm(text) {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+        // Common patterns for equipment plates
+        const patterns = {
+            // Manufacturer/Brand
+            manufacturer: /(?:fabricante|manufacturer|made\s+by|marca)[:\s]+([a-zA-Z0-9\s]+)/i,
+            brand: /(?:marca|brand|make)[:\s]+([a-zA-Z0-9\s]+)/i,
+            // Model
+            model: /(?:modelo|model|type)[:\s]+([a-zA-Z0-9\s\-]+)/i,
+            // Serial number (for equipmentId)
+            serial: /(?:s\/n|serial|n[úu]mero\s+de\s+serie|serie)[:\s]+([a-zA-Z0-9\-]+)/i,
+            // Manufacturing date (various formats)
+            date: /(?:fecha|date|fabricaci[óo]n|manufactured)[:\s]+(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}|\d{4})/i,
+            // Year only
+            year: /(?:a[ñn]o|year)[:\s]+(\d{4})/i,
+            // Pressure (for extinguishers)
+            pressure: /(?:presi[óo]n|pressure)[:\s]+([\d.]+)\s*(bar|psi|kg)/i,
+            // Capacity
+            capacity: /(?:capacidad|capacity)[:\s]+([\d.]+)\s*(kg|l|litros)/i
+        };
+
+        let foundData = {};
+
+        // Try to match patterns
+        for (const [key, pattern] of Object.entries(patterns)) {
+            for (const line of lines) {
+                const match = line.match(pattern);
+                if (match) {
+                    foundData[key] = match[1].trim();
+                    break;
+                }
+            }
+        }
+
+        // Also try heuristic approach for unstructured plates
+        // Look for common brand names
+        const commonBrands = ['KIDDE', 'GLORIA', 'VIKING', 'TYCO', 'ANSUL', 'FIRE', 'EXTINTOR', 'AMEREX', 'BADGER'];
+        for (const line of lines) {
+            for (const brand of commonBrands) {
+                if (line.toUpperCase().includes(brand)) {
+                    if (!foundData.brand && !foundData.manufacturer) {
+                        foundData.brand = brand;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Fill form fields
+        const manufacturerInput = document.getElementById('manufacturer');
+        const brandInput = document.getElementById('brand');
+        const modelInput = document.getElementById('model');
+        const manufacturingDateInput = document.getElementById('manufacturingDate');
+
+        let filled = 0;
+
+        if (foundData.manufacturer && manufacturerInput) {
+            manufacturerInput.value = foundData.manufacturer;
+            manufacturerInput.style.background = 'rgba(76, 175, 80, 0.1)';
+            setTimeout(() => { manufacturerInput.style.background = ''; }, 2000);
+            filled++;
+        }
+
+        if (foundData.brand && brandInput) {
+            brandInput.value = foundData.brand;
+            brandInput.style.background = 'rgba(76, 175, 80, 0.1)';
+            setTimeout(() => { brandInput.style.background = ''; }, 2000);
+            filled++;
+        }
+
+        if (foundData.model && modelInput) {
+            modelInput.value = foundData.model;
+            modelInput.style.background = 'rgba(76, 175, 80, 0.1)';
+            setTimeout(() => { modelInput.style.background = ''; }, 2000);
+            filled++;
+        }
+
+        // Parse date
+        if ((foundData.date || foundData.year) && manufacturingDateInput) {
+            let dateStr = foundData.date || `01/01/${foundData.year}`;
+
+            // Try to parse various date formats
+            const parsedDate = parseDate(dateStr);
+            if (parsedDate) {
+                manufacturingDateInput.value = parsedDate;
+                manufacturingDateInput.style.background = 'rgba(76, 175, 80, 0.1)';
+                setTimeout(() => { manufacturingDateInput.style.background = ''; }, 2000);
+                filled++;
+            }
+        }
+
+        if (filled === 0) {
+            showToast('No se detectaron campos automáticamente. Revisa el texto extraído.', 'warning');
+        } else {
+            showToast(`✓ ${filled} campo(s) rellenado(s) automáticamente`, 'success');
+        }
+    }
+
+    // Parse date from various formats
+    function parseDate(dateStr) {
+        // Try different formats
+        const formats = [
+            /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,  // DD/MM/YYYY or MM/DD/YYYY
+            /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,  // YYYY/MM/DD
+            /(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})/,  // DD/MM/YY
+        ];
+
+        for (const format of formats) {
+            const match = dateStr.match(format);
+            if (match) {
+                let year, month, day;
+
+                if (format === formats[0]) {
+                    // Could be DD/MM/YYYY or MM/DD/YYYY - assume DD/MM/YYYY (European format)
+                    day = match[1].padStart(2, '0');
+                    month = match[2].padStart(2, '0');
+                    year = match[3];
+                } else if (format === formats[1]) {
+                    // YYYY/MM/DD
+                    year = match[1];
+                    month = match[2].padStart(2, '0');
+                    day = match[3].padStart(2, '0');
+                } else {
+                    // DD/MM/YY
+                    day = match[1].padStart(2, '0');
+                    month = match[2].padStart(2, '0');
+                    year = '20' + match[3];  // Assume 20xx
+                }
+
+                return `${year}-${month}-${day}`;
+            }
+        }
+
+        // If just a year
+        if (/^\d{4}$/.test(dateStr)) {
+            return `${dateStr}-01-01`;
+        }
+
+        return null;
+    }
+
+    // Show OCR Error
+    function showOCRError(message) {
+        ocrError.style.display = 'block';
+        ocrResults.style.display = 'none';
+        ocrProcessing.style.display = 'none';
+        ocrErrorText.textContent = message;
+    }
+
+    // Reset OCR Modal
+    function resetOCRModal() {
+        ocrProcessing.style.display = 'none';
+        ocrResults.style.display = 'none';
+        ocrError.style.display = 'none';
+        captureCanvas.style.display = 'none';
+        cameraPreview.style.display = 'none';
+        cameraPlaceholder.style.display = 'flex';
+        capturePhotoBtn.style.display = 'none';
+        retryOCRBtn.style.display = 'none';
+        capturedImageData = null;
+    }
+});
+
 // ===== Chart Rendering =====
 function renderPressureChart(inspection) {
     const ctx = document.getElementById('curveChart').getContext('2d');
