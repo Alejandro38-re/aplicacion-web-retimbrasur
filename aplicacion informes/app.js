@@ -1348,7 +1348,7 @@ function viewInspection(id) {
     showScreen('inspection');
 }
 
-// ===== Export to Excel =====
+// ===== Export to Excel (AppSheet Compatible Format) =====
 document.getElementById('exportBtn').addEventListener('click', exportToExcel);
 
 function exportToExcel() {
@@ -1357,7 +1357,120 @@ function exportToExcel() {
         return;
     }
 
-    let csv = 'ID,Cliente,Centro de Trabajo,Tipo de Equipo,ID del Equipo,Ubicación,Fabricante,Marca,Modelo,Fecha Fabricación,Último Retimbrado,Fecha de Inspección,Técnico,Estado,Conformes,Observaciones,No Conformes,% Completado,Observaciones Generales,Recomendaciones,Fecha de Creación,Caudal Nominal,Presión Nominal,RPM,Presión 0%,Presión 50%,Presión 100%,Presión 140%\n';
+    // Check if XLSX library is loaded
+    if (typeof XLSX === 'undefined') {
+        console.warn('XLSX library not loaded, falling back to CSV');
+        exportToCSV();
+        return;
+    }
+
+    showToast('Generando archivo Excel...', 'info');
+
+    // Prepare data in AppSheet format
+    const excelData = inspections.map(inspection => {
+        const conformeCount = inspection.checklist.filter(i => i.status === 'ok').length;
+        const warningCount = inspection.checklist.filter(i => i.status === 'warning').length;
+        const errorCount = inspection.checklist.filter(i => i.status === 'error').length;
+        const totalItems = inspection.checklist.length;
+        const completedItems = inspection.checklist.filter(i => i.checked).length;
+        const percentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+        // AppSheet format: Column names without spaces, ISO dates, clean structure
+        return {
+            'ID': inspection.id,
+            'WorkCenter_ID': inspection.workCenterId || '',
+            'WorkCenter_Name': inspection.workCenterName || '',
+            'Equipment_Type': inspection.equipmentType || '',
+            'Equipment_ID': inspection.equipmentId || '',
+            'Location': inspection.location || '',
+            'Manufacturer': inspection.manufacturer || '',
+            'Brand': inspection.brand || '',
+            'Model': inspection.model || '',
+            'Manufacturing_Date': inspection.manufacturingDate || '',
+            'Last_Retest_Date': inspection.lastRetestDate || '',
+            'Inspection_Date': inspection.inspectionDate || '',
+            'Technician': inspection.technician || '',
+            'Technician_ID': inspection.technicianId || '',
+            'Status': inspection.status || 'draft',
+            'Total_Items': totalItems,
+            'Checked_Items': completedItems,
+            'OK_Count': conformeCount,
+            'Warning_Count': warningCount,
+            'Error_Count': errorCount,
+            'Completion_Percentage': percentage,
+            'Observations': inspection.observations || '',
+            'Recommendations': inspection.recommendations || '',
+            'Photo_Count': inspection.photos ? inspection.photos.length : (inspection.photo ? 1 : 0),
+            'Has_Technician_Signature': inspection.technicianSignature ? 'YES' : 'NO',
+            'Has_Client_Signature': inspection.clientSignature ? 'YES' : 'NO',
+            'GPS_Latitude': inspection.gpsCoordinates ? inspection.gpsCoordinates.latitude : '',
+            'GPS_Longitude': inspection.gpsCoordinates ? inspection.gpsCoordinates.longitude : '',
+            'GPS_Accuracy': inspection.gpsCoordinates ? inspection.gpsCoordinates.accuracy : '',
+            'Created_At': inspection.createdAt || '',
+            'Updated_At': inspection.updatedAt || '',
+            'Synced': inspection.synced ? 'YES' : 'NO',
+            'Synced_At': inspection.syncedAt || ''
+        };
+    });
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Set column widths for better readability
+    const colWidths = [
+        { wch: 36 }, // ID
+        { wch: 20 }, // WorkCenter_ID
+        { wch: 25 }, // WorkCenter_Name
+        { wch: 20 }, // Equipment_Type
+        { wch: 15 }, // Equipment_ID
+        { wch: 30 }, // Location
+        { wch: 20 }, // Manufacturer
+        { wch: 15 }, // Brand
+        { wch: 15 }, // Model
+        { wch: 15 }, // Manufacturing_Date
+        { wch: 15 }, // Last_Retest_Date
+        { wch: 15 }, // Inspection_Date
+        { wch: 20 }, // Technician
+        { wch: 15 }, // Technician_ID
+        { wch: 12 }, // Status
+        { wch: 12 }, // Total_Items
+        { wch: 12 }, // Checked_Items
+        { wch: 10 }, // OK_Count
+        { wch: 12 }, // Warning_Count
+        { wch: 12 }, // Error_Count
+        { wch: 18 }, // Completion_Percentage
+        { wch: 40 }, // Observations
+        { wch: 40 }, // Recommendations
+        { wch: 12 }, // Photo_Count
+        { wch: 20 }, // Has_Technician_Signature
+        { wch: 18 }, // Has_Client_Signature
+        { wch: 15 }, // GPS_Latitude
+        { wch: 15 }, // GPS_Longitude
+        { wch: 12 }, // GPS_Accuracy
+        { wch: 20 }, // Created_At
+        { wch: 20 }, // Updated_At
+        { wch: 10 }, // Synced
+        { wch: 20 }  // Synced_At
+    ];
+    ws['!cols'] = colWidths;
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Inspecciones');
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `RETIMBRASUR_Inspecciones_${timestamp}.xlsx`;
+
+    // Export file
+    XLSX.writeFile(wb, filename);
+
+    showToast(`✓ Exportado: ${inspections.length} inspecciones`, 'success');
+}
+
+// Fallback CSV export if XLSX not available
+function exportToCSV() {
+    let csv = 'ID,WorkCenter_ID,WorkCenter_Name,Equipment_Type,Equipment_ID,Location,Manufacturer,Brand,Model,Manufacturing_Date,Last_Retest_Date,Inspection_Date,Technician,Status,Total_Items,Checked_Items,OK_Count,Warning_Count,Error_Count,Completion_Percentage,Observations,Recommendations,Photo_Count,Created_At\n';
 
     inspections.forEach(inspection => {
         const conformeCount = inspection.checklist.filter(i => i.status === 'ok').length;
@@ -1369,9 +1482,9 @@ function exportToExcel() {
 
         const row = [
             inspection.id,
-            `"${(inspection.clientName || '').replace(/"/g, '""')}"`,
+            inspection.workCenterId || '',
             `"${(inspection.workCenterName || '').replace(/"/g, '""')}"`,
-            equipmentTypes[inspection.equipmentType].name,
+            inspection.equipmentType || '',
             `"${(inspection.equipmentId || '').replace(/"/g, '""')}"`,
             `"${(inspection.location || '').replace(/"/g, '""')}"`,
             `"${(inspection.manufacturer || '').replace(/"/g, '""')}"`,
@@ -1381,21 +1494,17 @@ function exportToExcel() {
             inspection.lastRetestDate || '',
             inspection.inspectionDate || '',
             `"${(inspection.technician || '').replace(/"/g, '""')}"`,
-            inspection.status === 'completed' ? 'Completada' : 'Borrador',
+            inspection.status || 'draft',
+            totalItems,
+            completedItems,
             conformeCount,
             warningCount,
             errorCount,
-            `${percentage}%`,
+            percentage,
             `"${(inspection.observations || '').replace(/"/g, '""')}"`,
             `"${(inspection.recommendations || '').replace(/"/g, '""')}"`,
-            new Date(inspection.createdAt).toLocaleDateString('es-ES'),
-            inspection.nominalFlow || '',
-            inspection.nominalPressure || '',
-            inspection.rpm || '',
-            inspection.pressureZero || '',
-            inspection.pressure50 || '',
-            inspection.pressureNominal || '',
-            inspection.pressureOverload || ''
+            inspection.photos ? inspection.photos.length : (inspection.photo ? 1 : 0),
+            inspection.createdAt || ''
         ];
 
         csv += row.join(',') + '\n';
@@ -1406,15 +1515,323 @@ function exportToExcel() {
     const url = URL.createObjectURL(blob);
 
     link.setAttribute('href', url);
-    link.setAttribute('download', `inspecciones_pci_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `RETIMBRASUR_Inspecciones_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    showToast('Datos exportados correctamente', 'success');
+    showToast('Exportado a CSV correctamente', 'success');
 }
+
+// ===== Import Inspections from Excel/CSV =====
+document.addEventListener('DOMContentLoaded', () => {
+    const importBtn = document.getElementById('importBtn');
+    const importModal = document.getElementById('importModal');
+    const closeImportModal = document.getElementById('closeImportModal');
+    const cancelImportBtn = document.getElementById('cancelImportBtn');
+    const importFileInput = document.getElementById('importFile');
+    const executeImportBtn = document.getElementById('executeImportBtn');
+    const importResults = document.getElementById('importResults');
+    const importError = document.getElementById('importError');
+    const importStats = document.getElementById('importStats');
+    const importErrorText = document.getElementById('importErrorText');
+
+    let fileData = null;
+
+    // Open modal
+    if (importBtn) {
+        importBtn.addEventListener('click', () => {
+            importModal.classList.add('active');
+            // Reset modal state
+            importFileInput.value = '';
+            fileData = null;
+            executeImportBtn.disabled = true;
+            importResults.style.display = 'none';
+            importError.style.display = 'none';
+            document.querySelector('input[name="importMode"][value="new"]').checked = true;
+        });
+    }
+
+    // Close modal
+    [closeImportModal, cancelImportBtn].forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', () => {
+                importModal.classList.remove('active');
+            });
+        }
+    });
+
+    // File selection handler
+    if (importFileInput) {
+        importFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                executeImportBtn.disabled = true;
+                fileData = null;
+                return;
+            }
+
+            try {
+                importError.style.display = 'none';
+                importResults.style.display = 'none';
+
+                // Read file
+                const data = await readImportFile(file);
+                fileData = data;
+                executeImportBtn.disabled = false;
+
+                showToast(`✓ Archivo cargado: ${data.length} inspecciones detectadas`, 'success');
+            } catch (error) {
+                console.error('Error reading file:', error);
+                importError.style.display = 'block';
+                importErrorText.textContent = error.message;
+                executeImportBtn.disabled = true;
+                fileData = null;
+            }
+        });
+    }
+
+    // Execute import
+    if (executeImportBtn) {
+        executeImportBtn.addEventListener('click', () => {
+            if (!fileData || fileData.length === 0) {
+                showToast('No hay datos para importar', 'error');
+                return;
+            }
+
+            const mode = document.querySelector('input[name="importMode"]:checked').value;
+
+            try {
+                const stats = performImport(fileData, mode);
+
+                // Show results
+                importResults.style.display = 'block';
+                importError.style.display = 'none';
+
+                importStats.innerHTML = `
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                        <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #4caf50;">${stats.imported}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Importadas</div>
+                        </div>
+                        <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #ff9800;">${stats.updated}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Actualizadas</div>
+                        </div>
+                        <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #2196f3;">${stats.skipped}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Omitidas</div>
+                        </div>
+                        <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                            <div style="font-size: 1.5rem; font-weight: 700;">${stats.total}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Total</div>
+                        </div>
+                    </div>
+                `;
+
+                showToast(`✓ Importación completada: ${stats.imported} nuevas, ${stats.updated} actualizadas`, 'success');
+
+                // Refresh display if on dashboard
+                if (currentWorkCenter) {
+                    loadInspections();
+                }
+
+                // Auto-close after 3 seconds
+                setTimeout(() => {
+                    importModal.classList.remove('active');
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error during import:', error);
+                importError.style.display = 'block';
+                importResults.style.display = 'none';
+                importErrorText.textContent = error.message;
+                showToast('Error al importar inspecciones', 'error');
+            }
+        });
+    }
+
+    // Read file (Excel or CSV)
+    async function readImportFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    const data = e.target.result;
+                    let parsedData = [];
+
+                    if (file.name.endsWith('.csv')) {
+                        // Parse CSV
+                        parsedData = parseCSV(data);
+                    } else {
+                        // Parse Excel with SheetJS
+                        if (typeof XLSX === 'undefined') {
+                            reject(new Error('Librería XLSX no disponible. Solo archivos CSV son soportados.'));
+                            return;
+                        }
+
+                        const workbook = XLSX.read(data, { type: 'binary' });
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        parsedData = XLSX.utils.sheet_to_json(worksheet);
+                    }
+
+                    // Validate and normalize data
+                    const normalized = normalizeImportData(parsedData);
+                    resolve(normalized);
+
+                } catch (error) {
+                    reject(new Error(`Error al leer archivo: ${error.message}`));
+                }
+            };
+
+            reader.onerror = () => {
+                reject(new Error('Error al leer el archivo'));
+            };
+
+            if (file.name.endsWith('.csv')) {
+                reader.readAsText(file);
+            } else {
+                reader.readAsBinaryString(file);
+            }
+        });
+    }
+
+    // Parse CSV manually
+    function parseCSV(text) {
+        const lines = text.trim().split('\n');
+        if (lines.length < 2) {
+            throw new Error('Archivo CSV vacío o inválido');
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        const data = [];
+
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+            const row = {};
+            headers.forEach((header, index) => {
+                row[header] = values[index] || '';
+            });
+            data.push(row);
+        }
+
+        return data;
+    }
+
+    // Normalize imported data to match internal format
+    function normalizeImportData(data) {
+        const normalized = [];
+
+        data.forEach((row, index) => {
+            try {
+                // Support both underscore (AppSheet) and original format
+                const inspection = {
+                    id: row.ID || row.id || `imported-${Date.now()}-${index}`,
+                    workCenterId: row.WorkCenter_ID || row.workCenterId || '',
+                    workCenterName: row.WorkCenter_Name || row.workCenterName || '',
+                    equipmentType: row.Equipment_Type || row.equipmentType || '',
+                    equipmentId: row.Equipment_ID || row.equipmentId || '',
+                    location: row.Location || row.location || '',
+                    manufacturer: row.Manufacturer || row.manufacturer || '',
+                    brand: row.Brand || row.brand || '',
+                    model: row.Model || row.model || '',
+                    manufacturingDate: row.Manufacturing_Date || row.manufacturingDate || '',
+                    lastRetestDate: row.Last_Retest_Date || row.lastRetestDate || '',
+                    inspectionDate: row.Inspection_Date || row.inspectionDate || new Date().toISOString().split('T')[0],
+                    technician: row.Technician || row.technician || '',
+                    status: row.Status || row.status || 'draft',
+                    observations: row.Observations || row.observations || '',
+                    recommendations: row.Recommendations || row.recommendations || '',
+                    checklist: row.checklist || {},
+                    photos: row.photos || [],
+                    technicianSignature: row.technicianSignature || null,
+                    clientSignature: row.clientSignature || null,
+                    createdAt: row.Created_At || row.createdAt || new Date().toISOString(),
+                    updatedAt: row.Updated_At || row.updatedAt || new Date().toISOString(),
+                    synced: (row.Synced === 'YES' || row.synced === true) ? true : false
+                };
+
+                // Parse GPS coordinates if available
+                if (row.GPS_Latitude || row.gpsLatitude) {
+                    inspection.gpsCoordinates = {
+                        latitude: row.GPS_Latitude || row.gpsLatitude,
+                        longitude: row.GPS_Longitude || row.gpsLongitude,
+                        accuracy: row.GPS_Accuracy || row.gpsAccuracy || '',
+                        timestamp: row.gpsTimestamp || new Date().toISOString()
+                    };
+                }
+
+                normalized.push(inspection);
+            } catch (error) {
+                console.warn(`Skipping row ${index + 1}: ${error.message}`);
+            }
+        });
+
+        if (normalized.length === 0) {
+            throw new Error('No se encontraron inspecciones válidas en el archivo');
+        }
+
+        return normalized;
+    }
+
+    // Perform import based on mode
+    function performImport(data, mode) {
+        let existingInspections = JSON.parse(localStorage.getItem('inspections')) || [];
+        let imported = 0;
+        let updated = 0;
+        let skipped = 0;
+
+        if (mode === 'replace') {
+            // Replace all
+            localStorage.setItem('inspections', JSON.stringify(data));
+            return {
+                imported: data.length,
+                updated: 0,
+                skipped: 0,
+                total: data.length
+            };
+        }
+
+        data.forEach(newInspection => {
+            const existingIndex = existingInspections.findIndex(i => i.id === newInspection.id);
+
+            if (existingIndex >= 0) {
+                // Inspection exists
+                if (mode === 'overwrite') {
+                    // Update existing
+                    existingInspections[existingIndex] = {
+                        ...existingInspections[existingIndex],
+                        ...newInspection,
+                        updatedAt: new Date().toISOString()
+                    };
+                    updated++;
+                } else {
+                    // Skip (mode === 'new')
+                    skipped++;
+                }
+            } else {
+                // New inspection
+                existingInspections.push(newInspection);
+                imported++;
+            }
+        });
+
+        // Save to localStorage
+        localStorage.setItem('inspections', JSON.stringify(existingInspections));
+        inspections = existingInspections;
+
+        return {
+            imported,
+            updated,
+            skipped,
+            total: data.length
+        };
+    }
+});
 
 // ===== Chart Rendering =====
 function renderPressureChart(inspection) {
