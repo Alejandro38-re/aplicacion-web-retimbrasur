@@ -1107,6 +1107,30 @@ function generateReportHTML() {
                 </div>
             ` : ''}
 
+            ${inspection.technicianSignature || inspection.clientSignature ? `
+                <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                    <h3 style="margin: 0 0 15px 0; color: #333;">✍️ Firmas</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                        ${inspection.technicianSignature ? `
+                            <div style="text-align: center;">
+                                <p style="margin: 0 0 10px 0; font-weight: 600; color: #555;">Firma del Técnico</p>
+                                <div style="background: white; padding: 10px; border: 2px solid #ddd; border-radius: 8px;">
+                                    <img src="${inspection.technicianSignature}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" alt="Firma del técnico">
+                                </div>
+                            </div>
+                        ` : ''}
+                        ${inspection.clientSignature ? `
+                            <div style="text-align: center;">
+                                <p style="margin: 0 0 10px 0; font-weight: 600; color: #555;">Firma del Cliente</p>
+                                <div style="background: white; padding: 10px; border: 2px solid #ddd; border-radius: 8px;">
+                                    <img src="${inspection.clientSignature}" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" alt="Firma del cliente">
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            ` : ''}
+
             <!-- Professional Footer -->
             <div style="margin-top: 40px; padding: 25px; background: linear-gradient(135deg, #1e293b, #334155); color: white; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
                 <div style="text-align: center; margin-bottom: 15px;">
@@ -2724,4 +2748,183 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     console.log('Statistics functionality initialized');
+
+    // ===== DIGITAL SIGNATURES =====
+    let technicianSignatureData = null;
+    let clientSignatureData = null;
+
+    const techCanvas = document.getElementById('technicianSignature');
+    const clientCanvas = document.getElementById('clientSignature');
+    const clearTechBtn = document.getElementById('clearTechnicianSignature');
+    const clearClientBtn = document.getElementById('clearClientSignature');
+    const techPlaceholder = document.getElementById('techPlaceholder');
+    const clientPlaceholder = document.getElementById('clientPlaceholder');
+
+    // Signature pad class
+    class SignaturePad {
+        constructor(canvas, placeholder) {
+            this.canvas = canvas;
+            this.context = canvas.getContext('2d');
+            this.placeholder = placeholder;
+            this.isDrawing = false;
+            this.hasDrawn = false;
+
+            // Set canvas size properly
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            // Configure context
+            this.context.strokeStyle = '#000000';
+            this.context.lineWidth = 2;
+            this.context.lineCap = 'round';
+            this.context.lineJoin = 'round';
+
+            this.setupEventListeners();
+        }
+
+        setupEventListeners() {
+            // Mouse events
+            this.canvas.addEventListener('mousedown', this.startDrawing.bind(this));
+            this.canvas.addEventListener('mousemove', this.draw.bind(this));
+            this.canvas.addEventListener('mouseup', this.stopDrawing.bind(this));
+            this.canvas.addEventListener('mouseout', this.stopDrawing.bind(this));
+
+            // Touch events
+            this.canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const mouseEvent = new MouseEvent('mousedown', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                this.canvas.dispatchEvent(mouseEvent);
+            });
+
+            this.canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const mouseEvent = new MouseEvent('mousemove', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                this.canvas.dispatchEvent(mouseEvent);
+            });
+
+            this.canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                const mouseEvent = new MouseEvent('mouseup', {});
+                this.canvas.dispatchEvent(mouseEvent);
+            });
+        }
+
+        startDrawing(e) {
+            this.isDrawing = true;
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            this.context.beginPath();
+            this.context.moveTo(x, y);
+        }
+
+        draw(e) {
+            if (!this.isDrawing) return;
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            this.context.lineTo(x, y);
+            this.context.stroke();
+
+            if (!this.hasDrawn) {
+                this.hasDrawn = true;
+                if (this.placeholder) this.placeholder.classList.add('hidden');
+                this.canvas.parentElement.classList.add('signed');
+            }
+        }
+
+        stopDrawing() {
+            if (this.isDrawing) {
+                this.isDrawing = false;
+                this.context.closePath();
+            }
+        }
+
+        clear() {
+            this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.hasDrawn = false;
+            if (this.placeholder) this.placeholder.classList.remove('hidden');
+            this.canvas.parentElement.classList.remove('signed');
+        }
+
+        getDataURL() {
+            return this.hasDrawn ? this.canvas.toDataURL('image/png') : null;
+        }
+
+        isEmpty() {
+            return !this.hasDrawn;
+        }
+    }
+
+    // Initialize signature pads
+    let techSignaturePad = null;
+    let clientSignaturePad = null;
+
+    if (techCanvas && clientCanvas) {
+        techSignaturePad = new SignaturePad(techCanvas, techPlaceholder);
+        clientSignaturePad = new SignaturePad(clientCanvas, clientPlaceholder);
+
+        // Clear buttons
+        if (clearTechBtn) {
+            clearTechBtn.addEventListener('click', () => {
+                techSignaturePad.clear();
+                technicianSignatureData = null;
+                showToast('Firma del técnico borrada', 'info');
+            });
+        }
+
+        if (clearClientBtn) {
+            clearClientBtn.addEventListener('click', () => {
+                clientSignaturePad.clear();
+                clientSignatureData = null;
+                showToast('Firma del cliente borrada', 'info');
+            });
+        }
+
+        // Integrate signatures with saveInspection
+        const originalSaveInspectionWithSignatures = window.saveInspection;
+        window.saveInspection = function(status = 'draft') {
+            // Get signature data
+            if (techSignaturePad && !techSignaturePad.isEmpty()) {
+                technicianSignatureData = techSignaturePad.getDataURL();
+            }
+            if (clientSignaturePad && !clientSignaturePad.isEmpty()) {
+                clientSignatureData = clientSignaturePad.getDataURL();
+            }
+
+            // Call original function
+            const result = originalSaveInspectionWithSignatures.call(this, status);
+
+            // Add signatures to last inspection
+            if (inspections.length > 0) {
+                const lastInspection = inspections[inspections.length - 1];
+                if (technicianSignatureData) lastInspection.technicianSignature = technicianSignatureData;
+                if (clientSignatureData) lastInspection.clientSignature = clientSignatureData;
+                localStorage.setItem('inspections', JSON.stringify(inspections));
+            }
+
+            return result;
+        };
+
+        // Clear signatures on reset
+        const originalResetWithSignatures = window.resetInspectionForm;
+        window.resetInspectionForm = function() {
+            if (originalResetWithSignatures) originalResetWithSignatures.call(this);
+            if (techSignaturePad) techSignaturePad.clear();
+            if (clientSignaturePad) clientSignaturePad.clear();
+            technicianSignatureData = null;
+            clientSignatureData = null;
+        };
+
+        console.log('Digital signatures initialized');
+    }
 });

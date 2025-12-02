@@ -1289,6 +1289,69 @@ body {
     border-color: var(--primary-color);
 }
 
+/* ===== Digital Signatures ===== */
+.signatures-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: var(--spacing-xl);
+}
+
+.signature-box {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.signature-box label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1.05rem;
+}
+
+.signature-canvas-container {
+    position: relative;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px dashed var(--glass-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: all var(--transition-normal);
+}
+
+.signature-canvas-container:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 15px rgba(255, 107, 53, 0.2);
+}
+
+.signature-canvas {
+    display: block;
+    width: 100%;
+    height: 200px;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.signature-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(0, 0, 0, 0.3);
+    font-size: 1.2rem;
+    font-style: italic;
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
+}
+
+.signature-placeholder.hidden {
+    opacity: 0;
+}
+
+.signature-canvas-container.signed {
+    border-style: solid;
+    border-color: var(--success);
+    background: rgba(16, 185, 129, 0.05);
+}
+
 /* ===== Inspection Reminder Badges ===== */
 .inspection-badge-ok {
     display: inline-flex;

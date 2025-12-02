@@ -250,6 +250,41 @@
                         </div>
                     </div>
 
+                    <!-- Digital Signatures Section -->
+                    <div class="form-section">
+                        <h3 class="section-title">
+                            <span class="icon">✍️</span>
+                            Firmas Digitales
+                        </h3>
+                        <div class="signatures-grid">
+                            <!-- Technician Signature -->
+                            <div class="signature-box">
+                                <label>Firma del Técnico</label>
+                                <div class="signature-canvas-container">
+                                    <canvas id="technicianSignature" class="signature-canvas" width="400" height="200"></canvas>
+                                    <div class="signature-placeholder" id="techPlaceholder">Firme aquí</div>
+                                </div>
+                                <button type="button" id="clearTechnicianSignature" class="btn btn-ghost btn-sm">
+                                    <span class="icon">🗑️</span>
+                                    Limpiar
+                                </button>
+                            </div>
+
+                            <!-- Client Signature -->
+                            <div class="signature-box">
+                                <label>Firma del Cliente</label>
+                                <div class="signature-canvas-container">
+                                    <canvas id="clientSignature" class="signature-canvas" width="400" height="200"></canvas>
+                                    <div class="signature-placeholder" id="clientPlaceholder">Firme aquí</div>
+                                </div>
+                                <button type="button" id="clearClientSignature" class="btn btn-ghost btn-sm">
+                                    <span class="icon">🗑️</span>
+                                    Limpiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Action Buttons -->
                     <div class="form-actions">
                         <button id="saveDraftBtn" class="btn btn-secondary">
