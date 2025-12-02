@@ -1348,7 +1348,7 @@ function viewInspection(id) {
     showScreen('inspection');
 }
 
-// ===== Export to Excel =====
+// ===== Export to Excel (AppSheet Compatible Format) =====
 document.getElementById('exportBtn').addEventListener('click', exportToExcel);
 
 function exportToExcel() {
@@ -1357,7 +1357,120 @@ function exportToExcel() {
         return;
     }
 
-    let csv = 'ID,Cliente,Centro de Trabajo,Tipo de Equipo,ID del Equipo,Ubicación,Fabricante,Marca,Modelo,Fecha Fabricación,Último Retimbrado,Fecha de Inspección,Técnico,Estado,Conformes,Observaciones,No Conformes,% Completado,Observaciones Generales,Recomendaciones,Fecha de Creación,Caudal Nominal,Presión Nominal,RPM,Presión 0%,Presión 50%,Presión 100%,Presión 140%\n';
+    // Check if XLSX library is loaded
+    if (typeof XLSX === 'undefined') {
+        console.warn('XLSX library not loaded, falling back to CSV');
+        exportToCSV();
+        return;
+    }
+
+    showToast('Generando archivo Excel...', 'info');
+
+    // Prepare data in AppSheet format
+    const excelData = inspections.map(inspection => {
+        const conformeCount = inspection.checklist.filter(i => i.status === 'ok').length;
+        const warningCount = inspection.checklist.filter(i => i.status === 'warning').length;
+        const errorCount = inspection.checklist.filter(i => i.status === 'error').length;
+        const totalItems = inspection.checklist.length;
+        const completedItems = inspection.checklist.filter(i => i.checked).length;
+        const percentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+        // AppSheet format: Column names without spaces, ISO dates, clean structure
+        return {
+            'ID': inspection.id,
+            'WorkCenter_ID': inspection.workCenterId || '',
+            'WorkCenter_Name': inspection.workCenterName || '',
+            'Equipment_Type': inspection.equipmentType || '',
+            'Equipment_ID': inspection.equipmentId || '',
+            'Location': inspection.location || '',
+            'Manufacturer': inspection.manufacturer || '',
+            'Brand': inspection.brand || '',
+            'Model': inspection.model || '',
+            'Manufacturing_Date': inspection.manufacturingDate || '',
+            'Last_Retest_Date': inspection.lastRetestDate || '',
+            'Inspection_Date': inspection.inspectionDate || '',
+            'Technician': inspection.technician || '',
+            'Technician_ID': inspection.technicianId || '',
+            'Status': inspection.status || 'draft',
+            'Total_Items': totalItems,
+            'Checked_Items': completedItems,
+            'OK_Count': conformeCount,
+            'Warning_Count': warningCount,
+            'Error_Count': errorCount,
+            'Completion_Percentage': percentage,
+            'Observations': inspection.observations || '',
+            'Recommendations': inspection.recommendations || '',
+            'Photo_Count': inspection.photos ? inspection.photos.length : (inspection.photo ? 1 : 0),
+            'Has_Technician_Signature': inspection.technicianSignature ? 'YES' : 'NO',
+            'Has_Client_Signature': inspection.clientSignature ? 'YES' : 'NO',
+            'GPS_Latitude': inspection.gpsCoordinates ? inspection.gpsCoordinates.latitude : '',
+            'GPS_Longitude': inspection.gpsCoordinates ? inspection.gpsCoordinates.longitude : '',
+            'GPS_Accuracy': inspection.gpsCoordinates ? inspection.gpsCoordinates.accuracy : '',
+            'Created_At': inspection.createdAt || '',
+            'Updated_At': inspection.updatedAt || '',
+            'Synced': inspection.synced ? 'YES' : 'NO',
+            'Synced_At': inspection.syncedAt || ''
+        };
+    });
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Set column widths for better readability
+    const colWidths = [
+        { wch: 36 }, // ID
+        { wch: 20 }, // WorkCenter_ID
+        { wch: 25 }, // WorkCenter_Name
+        { wch: 20 }, // Equipment_Type
+        { wch: 15 }, // Equipment_ID
+        { wch: 30 }, // Location
+        { wch: 20 }, // Manufacturer
+        { wch: 15 }, // Brand
+        { wch: 15 }, // Model
+        { wch: 15 }, // Manufacturing_Date
+        { wch: 15 }, // Last_Retest_Date
+        { wch: 15 }, // Inspection_Date
+        { wch: 20 }, // Technician
+        { wch: 15 }, // Technician_ID
+        { wch: 12 }, // Status
+        { wch: 12 }, // Total_Items
+        { wch: 12 }, // Checked_Items
+        { wch: 10 }, // OK_Count
+        { wch: 12 }, // Warning_Count
+        { wch: 12 }, // Error_Count
+        { wch: 18 }, // Completion_Percentage
+        { wch: 40 }, // Observations
+        { wch: 40 }, // Recommendations
+        { wch: 12 }, // Photo_Count
+        { wch: 20 }, // Has_Technician_Signature
+        { wch: 18 }, // Has_Client_Signature
+        { wch: 15 }, // GPS_Latitude
+        { wch: 15 }, // GPS_Longitude
+        { wch: 12 }, // GPS_Accuracy
+        { wch: 20 }, // Created_At
+        { wch: 20 }, // Updated_At
+        { wch: 10 }, // Synced
+        { wch: 20 }  // Synced_At
+    ];
+    ws['!cols'] = colWidths;
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Inspecciones');
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `RETIMBRASUR_Inspecciones_${timestamp}.xlsx`;
+
+    // Export file
+    XLSX.writeFile(wb, filename);
+
+    showToast(`✓ Exportado: ${inspections.length} inspecciones`, 'success');
+}
+
+// Fallback CSV export if XLSX not available
+function exportToCSV() {
+    let csv = 'ID,WorkCenter_ID,WorkCenter_Name,Equipment_Type,Equipment_ID,Location,Manufacturer,Brand,Model,Manufacturing_Date,Last_Retest_Date,Inspection_Date,Technician,Status,Total_Items,Checked_Items,OK_Count,Warning_Count,Error_Count,Completion_Percentage,Observations,Recommendations,Photo_Count,Created_At\n';
 
     inspections.forEach(inspection => {
         const conformeCount = inspection.checklist.filter(i => i.status === 'ok').length;
@@ -1369,9 +1482,9 @@ function exportToExcel() {
 
         const row = [
             inspection.id,
-            `"${(inspection.clientName || '').replace(/"/g, '""')}"`,
+            inspection.workCenterId || '',
             `"${(inspection.workCenterName || '').replace(/"/g, '""')}"`,
-            equipmentTypes[inspection.equipmentType].name,
+            inspection.equipmentType || '',
             `"${(inspection.equipmentId || '').replace(/"/g, '""')}"`,
             `"${(inspection.location || '').replace(/"/g, '""')}"`,
             `"${(inspection.manufacturer || '').replace(/"/g, '""')}"`,
@@ -1381,21 +1494,17 @@ function exportToExcel() {
             inspection.lastRetestDate || '',
             inspection.inspectionDate || '',
             `"${(inspection.technician || '').replace(/"/g, '""')}"`,
-            inspection.status === 'completed' ? 'Completada' : 'Borrador',
+            inspection.status || 'draft',
+            totalItems,
+            completedItems,
             conformeCount,
             warningCount,
             errorCount,
-            `${percentage}%`,
+            percentage,
             `"${(inspection.observations || '').replace(/"/g, '""')}"`,
             `"${(inspection.recommendations || '').replace(/"/g, '""')}"`,
-            new Date(inspection.createdAt).toLocaleDateString('es-ES'),
-            inspection.nominalFlow || '',
-            inspection.nominalPressure || '',
-            inspection.rpm || '',
-            inspection.pressureZero || '',
-            inspection.pressure50 || '',
-            inspection.pressureNominal || '',
-            inspection.pressureOverload || ''
+            inspection.photos ? inspection.photos.length : (inspection.photo ? 1 : 0),
+            inspection.createdAt || ''
         ];
 
         csv += row.join(',') + '\n';
@@ -1406,14 +1515,14 @@ function exportToExcel() {
     const url = URL.createObjectURL(blob);
 
     link.setAttribute('href', url);
-    link.setAttribute('download', `inspecciones_pci_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `RETIMBRASUR_Inspecciones_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    showToast('Datos exportados correctamente', 'success');
+    showToast('Exportado a CSV correctamente', 'success');
 }
 
 // ===== Chart Rendering =====
