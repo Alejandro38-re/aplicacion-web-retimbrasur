@@ -845,9 +845,14 @@ function showModal() {
     }
 }
 
-document.querySelector('.modal-close').addEventListener('click', () => {
-    document.getElementById('reportModal').classList.remove('active');
-    showScreen('welcome');
+// Handle all modal close buttons
+document.querySelectorAll('.modal-close').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const modal = e.target.closest('.modal');
+        if (modal) {
+            modal.classList.remove('active');
+        }
+    });
 });
 
 document.getElementById('closeModalBtn').addEventListener('click', () => {
@@ -2139,13 +2144,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     year = '20' + match[3];  // Assume 20xx
                 }
 
+                // Validate the date is actually valid
+                const dateObj = new Date(`${year}-${month}-${day}`);
+                if (isNaN(dateObj.getTime())) {
+                    continue; // Invalid date, try next format
+                }
+
+                // Verify the components match (catches invalid dates like 31/02)
+                if (dateObj.getFullYear() !== parseInt(year) ||
+                    dateObj.getMonth() + 1 !== parseInt(month) ||
+                    dateObj.getDate() !== parseInt(day)) {
+                    continue; // Date components don't match, invalid
+                }
+
                 return `${year}-${month}-${day}`;
             }
         }
 
         // If just a year
         if (/^\d{4}$/.test(dateStr)) {
-            return `${dateStr}-01-01`;
+            const year = parseInt(dateStr);
+            if (year >= 1900 && year <= 2100) {
+                return `${dateStr}-01-01`;
+            }
         }
 
         return null;
@@ -2602,6 +2623,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== PHOTO CAPTURE FUNCTIONALITY =====
     let currentPhotosArray = [];  // Changed from single photo to array
+    let currentPhotoData = null;  // Legacy variable - declared for compatibility
     const MAX_PHOTOS = 5;
 
     // Function to compress image using Canvas API
@@ -2637,19 +2659,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     canvas.height = height;
 
                     const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        reject(new Error('No se pudo crear el contexto del canvas'));
+                        return;
+                    }
 
-                    // Optional: Fill background with white for transparent images
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.fillRect(0, 0, width, height);
+                    try {
+                        // Optional: Fill background with white for transparent images
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, width, height);
 
-                    // Draw image on canvas
-                    ctx.drawImage(img, 0, 0, width, height);
+                        // Draw image on canvas
+                        ctx.drawImage(img, 0, 0, width, height);
 
-                    // Convert to JPEG with specified quality
-                    canvas.toBlob(
-                        (blob) => {
-                            const compressedReader = new FileReader();
-                            compressedReader.onloadend = () => {
+                        // Convert to JPEG with specified quality
+                        canvas.toBlob(
+                            (blob) => {
+                                if (!blob) {
+                                    reject(new Error('Error al comprimir la imagen'));
+                                    return;
+                                }
+                                const compressedReader = new FileReader();
+                                compressedReader.onloadend = () => {
                                 const originalSizeKB = (file.size / 1024).toFixed(2);
                                 const compressedSizeKB = (blob.size / 1024).toFixed(2);
                                 const compressionRatio = ((1 - blob.size / file.size) * 100).toFixed(1);
@@ -2668,6 +2699,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         'image/jpeg',
                         quality
                     );
+                    } catch (error) {
+                        reject(new Error(`Error al procesar la imagen: ${error.message}`));
+                    }
                 };
                 img.onerror = () => reject(new Error('Error al cargar la imagen'));
                 img.src = e.target.result;
@@ -2821,7 +2855,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Modify submit button behavior
     const originalSubmitBtn = document.getElementById('submitBtn');
-    if (originalSubmitBtn) {
+    if (originalSubmitBtn && originalSubmitBtn.parentNode) {
         // Remove existing listener and add new one
         const newSubmitBtn = originalSubmitBtn.cloneNode(true);
         originalSubmitBtn.parentNode.replaceChild(newSubmitBtn, originalSubmitBtn);
@@ -4412,11 +4446,17 @@ document.addEventListener('DOMContentLoaded', () => {
         recognition.onend = () => {
             if (isRecording) {
                 // Auto-restart if still recording (for continuous mode)
-                try {
-                    recognition.start();
-                } catch (e) {
-                    stopRecording();
-                }
+                // Add delay to prevent "recognition already started" error
+                setTimeout(() => {
+                    if (isRecording) {
+                        try {
+                            recognition.start();
+                        } catch (e) {
+                            console.warn('Could not restart recognition:', e);
+                            stopRecording();
+                        }
+                    }
+                }, 100); // 100ms delay prevents race condition
             }
         };
     }
