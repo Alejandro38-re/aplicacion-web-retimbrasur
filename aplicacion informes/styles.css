@@ -540,7 +540,7 @@ body {
     padding: var(--spacing-lg);
     overflow-y: auto;
     flex: 1;
-    color: #1e293b;
+    color: var(--text-primary);
 }
 
 #reportContent {

@@ -173,8 +173,21 @@ function getEquipmentByCenter(centerId) {
 
 // Get equipment by ID from center
 function getEquipmentById(centerId, equipmentId) {
+    // Validate parameters
+    if (!centerId || !equipmentId) {
+        console.warn('getEquipmentById: centerId or equipmentId is missing');
+        return null;
+    }
+
     const equipment = getEquipmentByCenter(centerId);
-    return equipment.find(e => e.id === equipmentId);
+
+    // Validate equipment array exists
+    if (!equipment || !Array.isArray(equipment)) {
+        console.warn(`getEquipmentById: No equipment found for center ${centerId}`);
+        return null;
+    }
+
+    return equipment.find(e => e.id === equipmentId) || null;
 }
 
 // ===== Data Structures =====
@@ -2196,7 +2209,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ===== Chart Rendering =====
 function renderPressureChart(inspection) {
-    const ctx = document.getElementById('curveChart').getContext('2d');
+    const canvas = document.getElementById('curveChart');
+    if (!canvas) {
+        console.warn('Canvas element "curveChart" not found');
+        return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        console.error('Unable to get 2D context from canvas');
+        return;
+    }
 
     const nominalFlow = parseFloat(inspection.nominalFlow) || 0;
     const nominalPressure = parseFloat(inspection.nominalPressure) || 0;
@@ -3356,8 +3379,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Render equipment type chart
     let equipmentTypeChartInstance = null;
     function renderEquipmentTypeChart(data) {
-        const ctx = document.getElementById('equipmentTypeChart');
-        if (!ctx) return;
+        const canvas = document.getElementById('equipmentTypeChart');
+        if (!canvas) {
+            console.warn('Canvas element "equipmentTypeChart" not found');
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            console.error('Unable to get 2D context from equipmentTypeChart canvas');
+            return;
+        }
 
         // Destroy previous chart if exists
         if (equipmentTypeChartInstance) {
@@ -3424,8 +3456,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Render inspection status chart
     let inspectionStatusChartInstance = null;
     function renderInspectionStatusChart(data) {
-        const ctx = document.getElementById('inspectionStatusChart');
-        if (!ctx) return;
+        const canvas = document.getElementById('inspectionStatusChart');
+        if (!canvas) {
+            console.warn('Canvas element "inspectionStatusChart" not found');
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            console.error('Unable to get 2D context from inspectionStatusChart canvas');
+            return;
+        }
 
         // Destroy previous chart if exists
         if (inspectionStatusChartInstance) {
@@ -4665,39 +4706,92 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Reverse geocoding: Get address from coordinates
-    async function reverseGeocode(lat, lng, locationInput) {
+    async function reverseGeocode(lat, lng, locationInput, retries = 2) {
         try {
+            // Validate coordinates
+            if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+                console.error('Invalid coordinates for reverse geocoding:', { lat, lng });
+                return;
+            }
+
+            // Check coordinate bounds (lat: -90 to 90, lng: -180 to 180)
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                console.error('Coordinates out of valid range:', { lat, lng });
+                return;
+            }
+
             const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18`;
 
-            const response = await fetch(url, {
-                headers: { 'User-Agent': 'RETIMBRASUR-App' }
-            });
+            // Add timeout to fetch request (10 seconds)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-            if (!response.ok) throw new Error('Geocoding failed');
+            try {
+                const response = await fetch(url, {
+                    headers: { 'User-Agent': 'RETIMBRASUR-App' },
+                    signal: controller.signal
+                });
 
-            const data = await response.json();
+                clearTimeout(timeoutId);
 
-            if (data && data.address) {
-                const addr = data.address;
-                let parts = [];
-
-                if (addr.road) parts.push(addr.road);
-                if (addr.house_number) parts.push(addr.house_number);
-                if (addr.suburb) parts.push(addr.suburb);
-                if (addr.city || addr.town) parts.push(addr.city || addr.town);
-
-                const readable = parts.join(', ');
-
-                if (readable && !locationInput.value.includes(readable)) {
-                    const current = locationInput.value;
-                    locationInput.value = current.startsWith('GPS:') ?
-                        `${readable} (${current})` : readable;
-
-                    showToast('✓ Dirección obtenida', 'success');
+                // Handle rate limiting
+                if (response.status === 429) {
+                    console.warn('Nominatim rate limit exceeded. Retrying in 2 seconds...');
+                    if (retries > 0) {
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        return reverseGeocode(lat, lng, locationInput, retries - 1);
+                    }
+                    throw new Error('Rate limit exceeded');
                 }
+
+                if (!response.ok) {
+                    throw new Error(`Geocoding failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Check if geocoding returned an error
+                if (data.error) {
+                    console.warn('Geocoding API returned error:', data.error);
+                    return;
+                }
+
+                if (data && data.address) {
+                    const addr = data.address;
+                    let parts = [];
+
+                    if (addr.road) parts.push(addr.road);
+                    if (addr.house_number) parts.push(addr.house_number);
+                    if (addr.suburb) parts.push(addr.suburb);
+                    if (addr.city || addr.town) parts.push(addr.city || addr.town);
+
+                    const readable = parts.join(', ');
+
+                    if (readable && !locationInput.value.includes(readable)) {
+                        const current = locationInput.value;
+                        locationInput.value = current.startsWith('GPS:') ?
+                            `${readable} (${current})` : readable;
+
+                        showToast('✓ Dirección obtenida', 'success');
+                    }
+                } else {
+                    console.warn('No address data found in geocoding response');
+                }
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+
+                // Handle timeout
+                if (fetchError.name === 'AbortError') {
+                    console.warn('Reverse geocoding timeout after 10s');
+                    if (retries > 0) {
+                        return reverseGeocode(lat, lng, locationInput, retries - 1);
+                    }
+                }
+                throw fetchError;
             }
         } catch (error) {
-            console.warn('Reverse geocoding failed:', error);
+            console.warn('Reverse geocoding failed:', error.message || error);
+            // Silently fail - coordinates are still saved in the input field
         }
     }
 
