@@ -2979,30 +2979,30 @@ document.addEventListener('DOMContentLoaded', () => {
             // Reset search
             searchInput.value = '';
 
-            // Remove previous listener if exists
-            const newSearchInput = searchInput.cloneNode(true);
-            searchInput.parentNode.replaceChild(newSearchInput, searchInput);
-
-            newSearchInput.addEventListener('input', (e) => {
-                const searchTerm = e.target.value;
-                const typeValue = typeFilter ? typeFilter.value : 'all';
-                filterEquipmentWithPhotos(searchTerm, typeValue, centerId);
-            });
+            // Only add listener if not already added (prevent memory leaks)
+            if (!searchInput.dataset.listenerAdded) {
+                searchInput.dataset.listenerAdded = 'true';
+                searchInput.addEventListener('input', (e) => {
+                    const searchTerm = e.target.value;
+                    const typeValue = typeFilter ? typeFilter.value : 'all';
+                    filterEquipmentWithPhotos(searchTerm, typeValue, centerId);
+                });
+            }
         }
 
         if (typeFilter) {
             // Reset filter
             typeFilter.value = 'all';
 
-            // Remove previous listener if exists
-            const newTypeFilter = typeFilter.cloneNode(true);
-            typeFilter.parentNode.replaceChild(newTypeFilter, typeFilter);
-
-            newTypeFilter.addEventListener('change', (e) => {
-                const typeValue = e.target.value;
-                const searchTerm = searchInput ? searchInput.value : '';
-                filterEquipmentWithPhotos(searchTerm, typeValue, centerId);
-            });
+            // Only add listener if not already added (prevent memory leaks)
+            if (!typeFilter.dataset.listenerAdded) {
+                typeFilter.dataset.listenerAdded = 'true';
+                typeFilter.addEventListener('change', (e) => {
+                    const typeValue = e.target.value;
+                    const searchTerm = searchInput ? searchInput.value : '';
+                    filterEquipmentWithPhotos(searchTerm, typeValue, centerId);
+                });
+            }
         }
     };
 
