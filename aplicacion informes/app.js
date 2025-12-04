@@ -812,6 +812,27 @@ function saveInspection(status) {
         technicianId: appSheetData.technicianId
     };
 
+    // Add pressure group specific fields if applicable
+    if (currentEquipmentType === 'grupos-presion') {
+        const nominalFlowEl = document.getElementById('nominalFlow');
+        const nominalPressureEl = document.getElementById('nominalPressure');
+        const powerEl = document.getElementById('power');
+        const rpmEl = document.getElementById('rpm');
+        const pressureZeroEl = document.getElementById('pressureZero');
+        const pressure50El = document.getElementById('pressure50');
+        const pressureNominalEl = document.getElementById('pressureNominal');
+        const pressureOverloadEl = document.getElementById('pressureOverload');
+
+        if (nominalFlowEl) inspection.nominalFlow = nominalFlowEl.value;
+        if (nominalPressureEl) inspection.nominalPressure = nominalPressureEl.value;
+        if (powerEl) inspection.power = powerEl.value;
+        if (rpmEl) inspection.rpm = rpmEl.value;
+        if (pressureZeroEl) inspection.pressureZero = pressureZeroEl.value;
+        if (pressure50El) inspection.pressure50 = pressure50El.value;
+        if (pressureNominalEl) inspection.pressureNominal = pressureNominalEl.value;
+        if (pressureOverloadEl) inspection.pressureOverload = pressureOverloadEl.value;
+    }
+
     // Save equipment to work center if checkbox is checked
     const saveEquipmentCheck = document.getElementById('saveEquipmentCheck');
     if (saveEquipmentCheck && saveEquipmentCheck.checked && currentWorkCenter) {
@@ -4611,6 +4632,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const voiceButtons = document.querySelectorAll('.voice-btn');
         voiceButtons.forEach(btn => {
             btn.style.display = 'none';
+            btn.title = 'Reconocimiento de voz no soportado en este navegador';
+        });
+        return;
+    }
+
+    // Check for HTTPS requirement (except localhost)
+    if (location.protocol !== 'https:' && !location.hostname.match(/^(localhost|127\.0\.0\.1)$/)) {
+        console.warn('Speech Recognition requires HTTPS');
+        const voiceButtons = document.querySelectorAll('.voice-btn');
+        voiceButtons.forEach(btn => {
+            btn.style.opacity = '0.5';
+            btn.title = 'El reconocimiento de voz requiere HTTPS';
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                showToast('⚠️ El reconocimiento de voz solo funciona en HTTPS o localhost', 'warning');
+            });
         });
         return;
     }
@@ -4672,18 +4709,40 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         recognition.onerror = (event) => {
-            console.error('Speech recognition error:', event.error);
-            stopRecording();
+            console.error('Speech recognition error:', event.error, event);
 
             const errorMessages = {
-                'no-speech': 'No se detectó ninguna voz. Intenta de nuevo.',
-                'audio-capture': 'No se puede acceder al micrófono. Verifica los permisos.',
-                'not-allowed': 'Permiso de micrófono denegado. Permite el acceso al micrófono.',
-                'network': 'Error de red. Verifica tu conexión a internet.'
+                'no-speech': '🔇 No se detectó ninguna voz. Habla más cerca del micrófono.',
+                'audio-capture': '🎤 No se puede acceder al micrófono. Verifica los permisos del navegador.',
+                'not-allowed': '🚫 Permiso de micrófono denegado. Ve a la configuración del navegador y permite el acceso.',
+                'network': '📡 Error de red. Verifica tu conexión a internet.',
+                'aborted': '⏹️ Reconocimiento cancelado.',
+                'language-not-supported': '🌍 Idioma no soportado. Intenta con español.',
+                'service-not-allowed': '⚠️ Servicio no permitido. Usa HTTPS o localhost.'
             };
 
-            const message = errorMessages[event.error] || `Error: ${event.error}`;
-            showToast(message, 'error');
+            const message = errorMessages[event.error] || `⚠️ Error de reconocimiento: ${event.error}`;
+
+            // Only stop and show error for non-recoverable errors
+            if (!['no-speech', 'aborted'].includes(event.error)) {
+                stopRecording();
+                showToast(message, 'error');
+            } else {
+                // For recoverable errors, just log and continue
+                console.warn(message);
+                // Auto-restart for 'no-speech' after a short delay
+                if (event.error === 'no-speech' && isRecording) {
+                    setTimeout(() => {
+                        if (isRecording) {
+                            try {
+                                recognition.start();
+                            } catch (e) {
+                                console.warn('Could not restart after no-speech:', e);
+                            }
+                        }
+                    }, 500);
+                }
+            }
         };
 
         recognition.onend = () => {
