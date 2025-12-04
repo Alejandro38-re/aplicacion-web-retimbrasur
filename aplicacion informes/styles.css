@@ -540,7 +540,7 @@ body {
     padding: var(--spacing-lg);
     overflow-y: auto;
     flex: 1;
-    color: #1e293b;
+    color: var(--text-primary);
 }
 
 #reportContent {
@@ -1452,6 +1452,28 @@ body {
     }
     50% {
         transform: scale(1.2);
+    }
+}
+
+/* ===== Spinner Animation ===== */
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* ===== Toast Slide Out Animation ===== */
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
     }
 }
 
