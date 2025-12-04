@@ -1,3 +1,11 @@
+// ===== RETIMBRASUR - Sistema de Inspección PCI =====
+const APP_VERSION = 'v2.0.0';
+console.log(`%c🔥 RETIMBRASUR ${APP_VERSION}`, 'color: #ff6b35; font-size: 16px; font-weight: bold;');
+console.log('%c✅ Cambios en esta versión:', 'color: #10b981; font-weight: bold;');
+console.log('   • Datos de presión se guardan correctamente');
+console.log('   • Gráficas muestran datos reales');
+console.log('   • Dictado por voz mejorado con auto-reinicio');
+
 // ===== AppSheet Integration =====
 // Parse URL parameters from AppSheet
 function getURLParameters() {
