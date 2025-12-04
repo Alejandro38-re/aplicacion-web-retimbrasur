@@ -1,10 +1,10 @@
 // ===== RETIMBRASUR - Sistema de Inspección PCI =====
-const APP_VERSION = 'v2.0.0';
+const APP_VERSION = 'v2.0.1';
 console.log(`%c🔥 RETIMBRASUR ${APP_VERSION}`, 'color: #ff6b35; font-size: 16px; font-weight: bold;');
 console.log('%c✅ Cambios en esta versión:', 'color: #10b981; font-weight: bold;');
-console.log('   • Datos de presión se guardan correctamente');
-console.log('   • Gráficas muestran datos reales');
-console.log('   • Dictado por voz mejorado con auto-reinicio');
+console.log('   • Corregida visualización de textos en tabla de presión');
+console.log('   • Mejorada conversión de valores numéricos en informes');
+console.log('   • Datos de presión se guardan y muestran correctamente');
 
 // ===== AppSheet Integration =====
 // Parse URL parameters from AppSheet
@@ -1048,29 +1048,29 @@ function generateReportHTML() {
                     <tr>
                         <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Caudal Cero (0%)</td>
                         <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">0 m³/h</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.pressureZero || '-'} bar</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.pressureZero && inspection.pressureZero !== '' ? inspection.pressureZero + ' bar' : '-'}</td>
                         <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">-</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Caudal 50%</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.nominalFlow ? (inspection.nominalFlow * 0.5).toFixed(1) : '-'} m³/h</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.pressure50 || '-'} bar</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.nominalFlow && inspection.nominalFlow !== '' ? (parseFloat(inspection.nominalFlow) * 0.5).toFixed(1) + ' m³/h' : '-'}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.pressure50 && inspection.pressure50 !== '' ? inspection.pressure50 + ' bar' : '-'}</td>
                         <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">-</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Caudal Nominal (100%)</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.nominalFlow || '-'} m³/h</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.pressureNominal || '-'} bar</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center; color: ${inspection.pressureNominal >= inspection.nominalPressure ? 'green' : 'red'}; font-weight: bold;">
-                            ${inspection.pressureNominal >= inspection.nominalPressure ? 'CUMPLE' : 'NO CUMPLE'}
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.nominalFlow && inspection.nominalFlow !== '' ? inspection.nominalFlow + ' m³/h' : '-'}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.pressureNominal && inspection.pressureNominal !== '' ? inspection.pressureNominal + ' bar' : '-'}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center; color: ${parseFloat(inspection.pressureNominal) >= parseFloat(inspection.nominalPressure) ? 'green' : 'red'}; font-weight: bold;">
+                            ${parseFloat(inspection.pressureNominal) >= parseFloat(inspection.nominalPressure) ? 'CUMPLE' : 'NO CUMPLE'}
                         </td>
                     </tr>
                     <tr>
                         <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Sobrecarga (140%)</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.nominalFlow ? (inspection.nominalFlow * 1.4).toFixed(1) : '-'} m³/h</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.pressureOverload || '-'} bar</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center; color: ${inspection.pressureOverload >= (inspection.nominalPressure * 0.7) ? 'green' : 'red'}; font-weight: bold;">
-                            ${inspection.pressureOverload >= (inspection.nominalPressure * 0.7) ? 'CUMPLE' : 'NO CUMPLE'}
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.nominalFlow && inspection.nominalFlow !== '' ? (parseFloat(inspection.nominalFlow) * 1.4).toFixed(1) + ' m³/h' : '-'}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${inspection.pressureOverload && inspection.pressureOverload !== '' ? inspection.pressureOverload + ' bar' : '-'}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center; color: ${parseFloat(inspection.pressureOverload) >= (parseFloat(inspection.nominalPressure) * 0.7) ? 'green' : 'red'}; font-weight: bold;">
+                            ${parseFloat(inspection.pressureOverload) >= (parseFloat(inspection.nominalPressure) * 0.7) ? 'CUMPLE' : 'NO CUMPLE'}
                         </td>
                     </tr>
                 </table>
@@ -3306,32 +3306,32 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <tr style="background: #f8fafc;">
                                     <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Caudal 0%</strong></td>
                                     <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">0 m³/h</td>
-                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureZero || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureZero && latestInsp.pressureZero !== '' ? latestInsp.pressureZero + ' bar' : '-'}</td>
                                     <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">-</td>
                                 </tr>
                                 <tr>
                                     <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Caudal 50%</strong></td>
-                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow ? (latestInsp.nominalFlow * 0.5).toFixed(1) : '-'} m³/h</td>
-                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressure50 || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow && latestInsp.nominalFlow !== '' ? (parseFloat(latestInsp.nominalFlow) * 0.5).toFixed(1) + ' m³/h' : '-'}</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressure50 && latestInsp.pressure50 !== '' ? latestInsp.pressure50 + ' bar' : '-'}</td>
                                     <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">-</td>
                                 </tr>
                                 <tr style="background: #f8fafc;">
                                     <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Caudal 100%</strong></td>
-                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow || '-'} m³/h</td>
-                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureNominal || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow && latestInsp.nominalFlow !== '' ? latestInsp.nominalFlow + ' m³/h' : '-'}</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureNominal && latestInsp.pressureNominal !== '' ? latestInsp.pressureNominal + ' bar' : '-'}</td>
                                     <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">
-                                        <span style="color: ${latestInsp.pressureNominal >= latestInsp.nominalPressure ? '#10b981' : '#ef4444'}; font-weight: bold;">
-                                            ${latestInsp.pressureNominal >= latestInsp.nominalPressure ? '✓ CUMPLE' : '✗ NO CUMPLE'}
+                                        <span style="color: ${parseFloat(latestInsp.pressureNominal) >= parseFloat(latestInsp.nominalPressure) ? '#10b981' : '#ef4444'}; font-weight: bold;">
+                                            ${parseFloat(latestInsp.pressureNominal) >= parseFloat(latestInsp.nominalPressure) ? '✓ CUMPLE' : '✗ NO CUMPLE'}
                                         </span>
                                     </td>
                                 </tr>
                                 <tr>
                                     <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Sobrecarga 140%</strong></td>
-                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow ? (latestInsp.nominalFlow * 1.4).toFixed(1) : '-'} m³/h</td>
-                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureOverload || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow && latestInsp.nominalFlow !== '' ? (parseFloat(latestInsp.nominalFlow) * 1.4).toFixed(1) + ' m³/h' : '-'}</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureOverload && latestInsp.pressureOverload !== '' ? latestInsp.pressureOverload + ' bar' : '-'}</td>
                                     <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">
-                                        <span style="color: ${latestInsp.pressureOverload >= (latestInsp.nominalPressure * 0.7) ? '#10b981' : '#ef4444'}; font-weight: bold;">
-                                            ${latestInsp.pressureOverload >= (latestInsp.nominalPressure * 0.7) ? '✓ CUMPLE' : '✗ NO CUMPLE'}
+                                        <span style="color: ${parseFloat(latestInsp.pressureOverload) >= (parseFloat(latestInsp.nominalPressure) * 0.7) ? '#10b981' : '#ef4444'}; font-weight: bold;">
+                                            ${parseFloat(latestInsp.pressureOverload) >= (parseFloat(latestInsp.nominalPressure) * 0.7) ? '✓ CUMPLE' : '✗ NO CUMPLE'}
                                         </span>
                                     </td>
                                 </tr>
