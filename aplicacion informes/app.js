@@ -173,8 +173,21 @@ function getEquipmentByCenter(centerId) {
 
 // Get equipment by ID from center
 function getEquipmentById(centerId, equipmentId) {
+    // Validate parameters
+    if (!centerId || !equipmentId) {
+        console.warn('getEquipmentById: centerId or equipmentId is missing');
+        return null;
+    }
+
     const equipment = getEquipmentByCenter(centerId);
-    return equipment.find(e => e.id === equipmentId);
+
+    // Validate equipment array exists
+    if (!equipment || !Array.isArray(equipment)) {
+        console.warn(`getEquipmentById: No equipment found for center ${centerId}`);
+        return null;
+    }
+
+    return equipment.find(e => e.id === equipmentId) || null;
 }
 
 // ===== Data Structures =====
@@ -845,9 +858,14 @@ function showModal() {
     }
 }
 
-document.querySelector('.modal-close').addEventListener('click', () => {
-    document.getElementById('reportModal').classList.remove('active');
-    showScreen('welcome');
+// Handle all modal close buttons
+document.querySelectorAll('.modal-close').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const modal = e.target.closest('.modal');
+        if (modal) {
+            modal.classList.remove('active');
+        }
+    });
 });
 
 document.getElementById('closeModalBtn').addEventListener('click', () => {
@@ -1348,7 +1366,7 @@ function viewInspection(id) {
     showScreen('inspection');
 }
 
-// ===== Export to Excel =====
+// ===== Export to Excel (AppSheet Compatible Format) =====
 document.getElementById('exportBtn').addEventListener('click', exportToExcel);
 
 function exportToExcel() {
@@ -1357,7 +1375,120 @@ function exportToExcel() {
         return;
     }
 
-    let csv = 'ID,Cliente,Centro de Trabajo,Tipo de Equipo,ID del Equipo,Ubicación,Fabricante,Marca,Modelo,Fecha Fabricación,Último Retimbrado,Fecha de Inspección,Técnico,Estado,Conformes,Observaciones,No Conformes,% Completado,Observaciones Generales,Recomendaciones,Fecha de Creación,Caudal Nominal,Presión Nominal,RPM,Presión 0%,Presión 50%,Presión 100%,Presión 140%\n';
+    // Check if XLSX library is loaded
+    if (typeof XLSX === 'undefined') {
+        console.warn('XLSX library not loaded, falling back to CSV');
+        exportToCSV();
+        return;
+    }
+
+    showToast('Generando archivo Excel...', 'info');
+
+    // Prepare data in AppSheet format
+    const excelData = inspections.map(inspection => {
+        const conformeCount = inspection.checklist.filter(i => i.status === 'ok').length;
+        const warningCount = inspection.checklist.filter(i => i.status === 'warning').length;
+        const errorCount = inspection.checklist.filter(i => i.status === 'error').length;
+        const totalItems = inspection.checklist.length;
+        const completedItems = inspection.checklist.filter(i => i.checked).length;
+        const percentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+        // AppSheet format: Column names without spaces, ISO dates, clean structure
+        return {
+            'ID': inspection.id,
+            'WorkCenter_ID': inspection.workCenterId || '',
+            'WorkCenter_Name': inspection.workCenterName || '',
+            'Equipment_Type': inspection.equipmentType || '',
+            'Equipment_ID': inspection.equipmentId || '',
+            'Location': inspection.location || '',
+            'Manufacturer': inspection.manufacturer || '',
+            'Brand': inspection.brand || '',
+            'Model': inspection.model || '',
+            'Manufacturing_Date': inspection.manufacturingDate || '',
+            'Last_Retest_Date': inspection.lastRetestDate || '',
+            'Inspection_Date': inspection.inspectionDate || '',
+            'Technician': inspection.technician || '',
+            'Technician_ID': inspection.technicianId || '',
+            'Status': inspection.status || 'draft',
+            'Total_Items': totalItems,
+            'Checked_Items': completedItems,
+            'OK_Count': conformeCount,
+            'Warning_Count': warningCount,
+            'Error_Count': errorCount,
+            'Completion_Percentage': percentage,
+            'Observations': inspection.observations || '',
+            'Recommendations': inspection.recommendations || '',
+            'Photo_Count': inspection.photos ? inspection.photos.length : (inspection.photo ? 1 : 0),
+            'Has_Technician_Signature': inspection.technicianSignature ? 'YES' : 'NO',
+            'Has_Client_Signature': inspection.clientSignature ? 'YES' : 'NO',
+            'GPS_Latitude': inspection.gpsCoordinates ? inspection.gpsCoordinates.latitude : '',
+            'GPS_Longitude': inspection.gpsCoordinates ? inspection.gpsCoordinates.longitude : '',
+            'GPS_Accuracy': inspection.gpsCoordinates ? inspection.gpsCoordinates.accuracy : '',
+            'Created_At': inspection.createdAt || '',
+            'Updated_At': inspection.updatedAt || '',
+            'Synced': inspection.synced ? 'YES' : 'NO',
+            'Synced_At': inspection.syncedAt || ''
+        };
+    });
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    // Set column widths for better readability
+    const colWidths = [
+        { wch: 36 }, // ID
+        { wch: 20 }, // WorkCenter_ID
+        { wch: 25 }, // WorkCenter_Name
+        { wch: 20 }, // Equipment_Type
+        { wch: 15 }, // Equipment_ID
+        { wch: 30 }, // Location
+        { wch: 20 }, // Manufacturer
+        { wch: 15 }, // Brand
+        { wch: 15 }, // Model
+        { wch: 15 }, // Manufacturing_Date
+        { wch: 15 }, // Last_Retest_Date
+        { wch: 15 }, // Inspection_Date
+        { wch: 20 }, // Technician
+        { wch: 15 }, // Technician_ID
+        { wch: 12 }, // Status
+        { wch: 12 }, // Total_Items
+        { wch: 12 }, // Checked_Items
+        { wch: 10 }, // OK_Count
+        { wch: 12 }, // Warning_Count
+        { wch: 12 }, // Error_Count
+        { wch: 18 }, // Completion_Percentage
+        { wch: 40 }, // Observations
+        { wch: 40 }, // Recommendations
+        { wch: 12 }, // Photo_Count
+        { wch: 20 }, // Has_Technician_Signature
+        { wch: 18 }, // Has_Client_Signature
+        { wch: 15 }, // GPS_Latitude
+        { wch: 15 }, // GPS_Longitude
+        { wch: 12 }, // GPS_Accuracy
+        { wch: 20 }, // Created_At
+        { wch: 20 }, // Updated_At
+        { wch: 10 }, // Synced
+        { wch: 20 }  // Synced_At
+    ];
+    ws['!cols'] = colWidths;
+
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Inspecciones');
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `RETIMBRASUR_Inspecciones_${timestamp}.xlsx`;
+
+    // Export file
+    XLSX.writeFile(wb, filename);
+
+    showToast(`✓ Exportado: ${inspections.length} inspecciones`, 'success');
+}
+
+// Fallback CSV export if XLSX not available
+function exportToCSV() {
+    let csv = 'ID,WorkCenter_ID,WorkCenter_Name,Equipment_Type,Equipment_ID,Location,Manufacturer,Brand,Model,Manufacturing_Date,Last_Retest_Date,Inspection_Date,Technician,Status,Total_Items,Checked_Items,OK_Count,Warning_Count,Error_Count,Completion_Percentage,Observations,Recommendations,Photo_Count,Created_At\n';
 
     inspections.forEach(inspection => {
         const conformeCount = inspection.checklist.filter(i => i.status === 'ok').length;
@@ -1369,9 +1500,9 @@ function exportToExcel() {
 
         const row = [
             inspection.id,
-            `"${(inspection.clientName || '').replace(/"/g, '""')}"`,
+            inspection.workCenterId || '',
             `"${(inspection.workCenterName || '').replace(/"/g, '""')}"`,
-            equipmentTypes[inspection.equipmentType].name,
+            inspection.equipmentType || '',
             `"${(inspection.equipmentId || '').replace(/"/g, '""')}"`,
             `"${(inspection.location || '').replace(/"/g, '""')}"`,
             `"${(inspection.manufacturer || '').replace(/"/g, '""')}"`,
@@ -1381,21 +1512,17 @@ function exportToExcel() {
             inspection.lastRetestDate || '',
             inspection.inspectionDate || '',
             `"${(inspection.technician || '').replace(/"/g, '""')}"`,
-            inspection.status === 'completed' ? 'Completada' : 'Borrador',
+            inspection.status || 'draft',
+            totalItems,
+            completedItems,
             conformeCount,
             warningCount,
             errorCount,
-            `${percentage}%`,
+            percentage,
             `"${(inspection.observations || '').replace(/"/g, '""')}"`,
             `"${(inspection.recommendations || '').replace(/"/g, '""')}"`,
-            new Date(inspection.createdAt).toLocaleDateString('es-ES'),
-            inspection.nominalFlow || '',
-            inspection.nominalPressure || '',
-            inspection.rpm || '',
-            inspection.pressureZero || '',
-            inspection.pressure50 || '',
-            inspection.pressureNominal || '',
-            inspection.pressureOverload || ''
+            inspection.photos ? inspection.photos.length : (inspection.photo ? 1 : 0),
+            inspection.createdAt || ''
         ];
 
         csv += row.join(',') + '\n';
@@ -1406,19 +1533,693 @@ function exportToExcel() {
     const url = URL.createObjectURL(blob);
 
     link.setAttribute('href', url);
-    link.setAttribute('download', `inspecciones_pci_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `RETIMBRASUR_Inspecciones_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
 
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    showToast('Datos exportados correctamente', 'success');
+    showToast('Exportado a CSV correctamente', 'success');
 }
+
+// ===== Import Inspections from Excel/CSV =====
+document.addEventListener('DOMContentLoaded', () => {
+    const importBtn = document.getElementById('importBtn');
+    const importModal = document.getElementById('importModal');
+    const closeImportModal = document.getElementById('closeImportModal');
+    const cancelImportBtn = document.getElementById('cancelImportBtn');
+    const importFileInput = document.getElementById('importFile');
+    const executeImportBtn = document.getElementById('executeImportBtn');
+    const importResults = document.getElementById('importResults');
+    const importError = document.getElementById('importError');
+    const importStats = document.getElementById('importStats');
+    const importErrorText = document.getElementById('importErrorText');
+
+    let fileData = null;
+
+    // Open modal
+    if (importBtn) {
+        importBtn.addEventListener('click', () => {
+            importModal.classList.add('active');
+            // Reset modal state
+            importFileInput.value = '';
+            fileData = null;
+            executeImportBtn.disabled = true;
+            importResults.style.display = 'none';
+            importError.style.display = 'none';
+            document.querySelector('input[name="importMode"][value="new"]').checked = true;
+        });
+    }
+
+    // Close modal
+    [closeImportModal, cancelImportBtn].forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', () => {
+                importModal.classList.remove('active');
+            });
+        }
+    });
+
+    // File selection handler
+    if (importFileInput) {
+        importFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                executeImportBtn.disabled = true;
+                fileData = null;
+                return;
+            }
+
+            try {
+                importError.style.display = 'none';
+                importResults.style.display = 'none';
+
+                // Read file
+                const data = await readImportFile(file);
+                fileData = data;
+                executeImportBtn.disabled = false;
+
+                showToast(`✓ Archivo cargado: ${data.length} inspecciones detectadas`, 'success');
+            } catch (error) {
+                console.error('Error reading file:', error);
+                importError.style.display = 'block';
+                importErrorText.textContent = error.message;
+                executeImportBtn.disabled = true;
+                fileData = null;
+            }
+        });
+    }
+
+    // Execute import
+    if (executeImportBtn) {
+        executeImportBtn.addEventListener('click', () => {
+            if (!fileData || fileData.length === 0) {
+                showToast('No hay datos para importar', 'error');
+                return;
+            }
+
+            const mode = document.querySelector('input[name="importMode"]:checked').value;
+
+            try {
+                const stats = performImport(fileData, mode);
+
+                // Show results
+                importResults.style.display = 'block';
+                importError.style.display = 'none';
+
+                importStats.innerHTML = `
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                        <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #4caf50;">${stats.imported}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Importadas</div>
+                        </div>
+                        <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #ff9800;">${stats.updated}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Actualizadas</div>
+                        </div>
+                        <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #2196f3;">${stats.skipped}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Omitidas</div>
+                        </div>
+                        <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                            <div style="font-size: 1.5rem; font-weight: 700;">${stats.total}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Total</div>
+                        </div>
+                    </div>
+                `;
+
+                showToast(`✓ Importación completada: ${stats.imported} nuevas, ${stats.updated} actualizadas`, 'success');
+
+                // Refresh display if on dashboard
+                if (currentWorkCenter) {
+                    loadInspections();
+                }
+
+                // Auto-close after 3 seconds
+                setTimeout(() => {
+                    importModal.classList.remove('active');
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error during import:', error);
+                importError.style.display = 'block';
+                importResults.style.display = 'none';
+                importErrorText.textContent = error.message;
+                showToast('Error al importar inspecciones', 'error');
+            }
+        });
+    }
+
+    // Read file (Excel or CSV)
+    async function readImportFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    const data = e.target.result;
+                    let parsedData = [];
+
+                    if (file.name.endsWith('.csv')) {
+                        // Parse CSV
+                        parsedData = parseCSV(data);
+                    } else {
+                        // Parse Excel with SheetJS
+                        if (typeof XLSX === 'undefined') {
+                            reject(new Error('Librería XLSX no disponible. Solo archivos CSV son soportados.'));
+                            return;
+                        }
+
+                        const workbook = XLSX.read(data, { type: 'binary' });
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        parsedData = XLSX.utils.sheet_to_json(worksheet);
+                    }
+
+                    // Validate and normalize data
+                    const normalized = normalizeImportData(parsedData);
+                    resolve(normalized);
+
+                } catch (error) {
+                    reject(new Error(`Error al leer archivo: ${error.message}`));
+                }
+            };
+
+            reader.onerror = () => {
+                reject(new Error('Error al leer el archivo'));
+            };
+
+            if (file.name.endsWith('.csv')) {
+                reader.readAsText(file);
+            } else {
+                reader.readAsBinaryString(file);
+            }
+        });
+    }
+
+    // Parse CSV manually
+    function parseCSV(text) {
+        const lines = text.trim().split('\n');
+        if (lines.length < 2) {
+            throw new Error('Archivo CSV vacío o inválido');
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        const data = [];
+
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+            const row = {};
+            headers.forEach((header, index) => {
+                row[header] = values[index] || '';
+            });
+            data.push(row);
+        }
+
+        return data;
+    }
+
+    // Normalize imported data to match internal format
+    function normalizeImportData(data) {
+        const normalized = [];
+
+        data.forEach((row, index) => {
+            try {
+                // Support both underscore (AppSheet) and original format
+                const inspection = {
+                    id: row.ID || row.id || `imported-${Date.now()}-${index}`,
+                    workCenterId: row.WorkCenter_ID || row.workCenterId || '',
+                    workCenterName: row.WorkCenter_Name || row.workCenterName || '',
+                    equipmentType: row.Equipment_Type || row.equipmentType || '',
+                    equipmentId: row.Equipment_ID || row.equipmentId || '',
+                    location: row.Location || row.location || '',
+                    manufacturer: row.Manufacturer || row.manufacturer || '',
+                    brand: row.Brand || row.brand || '',
+                    model: row.Model || row.model || '',
+                    manufacturingDate: row.Manufacturing_Date || row.manufacturingDate || '',
+                    lastRetestDate: row.Last_Retest_Date || row.lastRetestDate || '',
+                    inspectionDate: row.Inspection_Date || row.inspectionDate || new Date().toISOString().split('T')[0],
+                    technician: row.Technician || row.technician || '',
+                    status: row.Status || row.status || 'draft',
+                    observations: row.Observations || row.observations || '',
+                    recommendations: row.Recommendations || row.recommendations || '',
+                    checklist: row.checklist || {},
+                    photos: row.photos || [],
+                    technicianSignature: row.technicianSignature || null,
+                    clientSignature: row.clientSignature || null,
+                    createdAt: row.Created_At || row.createdAt || new Date().toISOString(),
+                    updatedAt: row.Updated_At || row.updatedAt || new Date().toISOString(),
+                    synced: (row.Synced === 'YES' || row.synced === true) ? true : false
+                };
+
+                // Parse GPS coordinates if available
+                if (row.GPS_Latitude || row.gpsLatitude) {
+                    inspection.gpsCoordinates = {
+                        latitude: row.GPS_Latitude || row.gpsLatitude,
+                        longitude: row.GPS_Longitude || row.gpsLongitude,
+                        accuracy: row.GPS_Accuracy || row.gpsAccuracy || '',
+                        timestamp: row.gpsTimestamp || new Date().toISOString()
+                    };
+                }
+
+                normalized.push(inspection);
+            } catch (error) {
+                console.warn(`Skipping row ${index + 1}: ${error.message}`);
+            }
+        });
+
+        if (normalized.length === 0) {
+            throw new Error('No se encontraron inspecciones válidas en el archivo');
+        }
+
+        return normalized;
+    }
+
+    // Perform import based on mode
+    function performImport(data, mode) {
+        let existingInspections = JSON.parse(localStorage.getItem('inspections')) || [];
+        let imported = 0;
+        let updated = 0;
+        let skipped = 0;
+
+        if (mode === 'replace') {
+            // Replace all
+            localStorage.setItem('inspections', JSON.stringify(data));
+            return {
+                imported: data.length,
+                updated: 0,
+                skipped: 0,
+                total: data.length
+            };
+        }
+
+        data.forEach(newInspection => {
+            const existingIndex = existingInspections.findIndex(i => i.id === newInspection.id);
+
+            if (existingIndex >= 0) {
+                // Inspection exists
+                if (mode === 'overwrite') {
+                    // Update existing
+                    existingInspections[existingIndex] = {
+                        ...existingInspections[existingIndex],
+                        ...newInspection,
+                        updatedAt: new Date().toISOString()
+                    };
+                    updated++;
+                } else {
+                    // Skip (mode === 'new')
+                    skipped++;
+                }
+            } else {
+                // New inspection
+                existingInspections.push(newInspection);
+                imported++;
+            }
+        });
+
+        // Save to localStorage
+        localStorage.setItem('inspections', JSON.stringify(existingInspections));
+        inspections = existingInspections;
+
+        return {
+            imported,
+            updated,
+            skipped,
+            total: data.length
+        };
+    }
+});
+
+// ===== OCR Plate Scanner =====
+document.addEventListener('DOMContentLoaded', () => {
+    const scanPlateBtn = document.getElementById('scanPlateBtn');
+    const ocrModal = document.getElementById('ocrPlateModal');
+    const closeOCRModal = document.getElementById('closeOCRModal');
+    const cancelOCRBtn = document.getElementById('cancelOCRBtn');
+    const capturePhotoBtn = document.getElementById('capturePhotoBtn');
+    const retryOCRBtn = document.getElementById('retryOCRBtn');
+
+    const cameraPreview = document.getElementById('ocrCameraPreview');
+    const captureCanvas = document.getElementById('ocrCaptureCanvas');
+    const cameraPlaceholder = document.getElementById('ocrCameraPlaceholder');
+
+    const ocrProcessing = document.getElementById('ocrProcessing');
+    const ocrResults = document.getElementById('ocrResults');
+    const ocrError = document.getElementById('ocrError');
+    const ocrStatus = document.getElementById('ocrStatus');
+    const ocrExtractedText = document.getElementById('ocrExtractedText');
+    const ocrErrorText = document.getElementById('ocrErrorText');
+
+    let cameraStream = null;
+    let capturedImageData = null;
+
+    // Open OCR Modal
+    if (scanPlateBtn) {
+        scanPlateBtn.addEventListener('click', async () => {
+            ocrModal.classList.add('active');
+            resetOCRModal();
+            await startCamera();
+        });
+    }
+
+    // Close OCR Modal
+    [closeOCRModal, cancelOCRBtn].forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', () => {
+                stopCamera();
+                ocrModal.classList.remove('active');
+            });
+        }
+    });
+
+    // Capture Photo
+    if (capturePhotoBtn) {
+        capturePhotoBtn.addEventListener('click', async () => {
+            if (!cameraStream) {
+                showToast('Cámara no disponible', 'error');
+                return;
+            }
+
+            try {
+                // Capture frame from video
+                const canvas = captureCanvas;
+                const ctx = canvas.getContext('2d');
+
+                canvas.width = cameraPreview.videoWidth;
+                canvas.height = cameraPreview.videoHeight;
+
+                ctx.drawImage(cameraPreview, 0, 0, canvas.width, canvas.height);
+
+                // Show captured image
+                cameraPreview.style.display = 'none';
+                canvas.style.display = 'block';
+                capturePhotoBtn.style.display = 'none';
+
+                // Get image data
+                capturedImageData = canvas.toDataURL('image/png');
+
+                // Stop camera
+                stopCamera();
+
+                // Process with OCR
+                await processOCR(capturedImageData);
+
+            } catch (error) {
+                console.error('Error capturing photo:', error);
+                showOCRError('Error al capturar la foto');
+            }
+        });
+    }
+
+    // Retry OCR
+    if (retryOCRBtn) {
+        retryOCRBtn.addEventListener('click', async () => {
+            resetOCRModal();
+            await startCamera();
+        });
+    }
+
+    // Start Camera
+    async function startCamera() {
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('Cámara no soportada en este navegador');
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' }, // Prefer back camera
+                audio: false
+            });
+
+            cameraStream = stream;
+            cameraPreview.srcObject = stream;
+            cameraPreview.style.display = 'block';
+            cameraPlaceholder.style.display = 'none';
+            capturePhotoBtn.style.display = 'block';
+
+        } catch (error) {
+            console.error('Error starting camera:', error);
+            showOCRError('No se pudo acceder a la cámara. Verifica los permisos.');
+        }
+    }
+
+    // Stop Camera
+    function stopCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+    }
+
+    // Process OCR
+    async function processOCR(imageData) {
+        try {
+            // Check if Tesseract is loaded
+            if (typeof Tesseract === 'undefined') {
+                throw new Error('Librería OCR no disponible');
+            }
+
+            // Show processing status
+            ocrProcessing.style.display = 'block';
+            ocrResults.style.display = 'none';
+            ocrError.style.display = 'none';
+            retryOCRBtn.style.display = 'none';
+
+            ocrStatus.textContent = 'Inicializando OCR...';
+
+            // Run Tesseract OCR
+            const worker = await Tesseract.createWorker('spa', 1, {
+                logger: (m) => {
+                    if (m.status === 'recognizing text') {
+                        const progress = Math.round(m.progress * 100);
+                        ocrStatus.textContent = `Reconociendo texto... ${progress}%`;
+                    }
+                }
+            });
+
+            const { data } = await worker.recognize(imageData);
+            await worker.terminate();
+
+            const extractedText = data.text.trim();
+
+            if (!extractedText) {
+                throw new Error('No se detectó texto en la imagen');
+            }
+
+            // Show results
+            ocrProcessing.style.display = 'none';
+            ocrResults.style.display = 'block';
+            ocrExtractedText.textContent = extractedText;
+            retryOCRBtn.style.display = 'inline-flex';
+
+            // Parse and fill form
+            parseAndFillForm(extractedText);
+
+            showToast('✓ Texto extraído correctamente', 'success');
+
+        } catch (error) {
+            console.error('OCR Error:', error);
+            ocrProcessing.style.display = 'none';
+            showOCRError(error.message || 'Error al procesar la imagen');
+            retryOCRBtn.style.display = 'inline-flex';
+        }
+    }
+
+    // Parse extracted text and fill form fields
+    function parseAndFillForm(text) {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+        // Common patterns for equipment plates
+        const patterns = {
+            // Manufacturer/Brand
+            manufacturer: /(?:fabricante|manufacturer|made\s+by|marca)[:\s]+([a-zA-Z0-9\s]+)/i,
+            brand: /(?:marca|brand|make)[:\s]+([a-zA-Z0-9\s]+)/i,
+            // Model
+            model: /(?:modelo|model|type)[:\s]+([a-zA-Z0-9\s\-]+)/i,
+            // Serial number (for equipmentId)
+            serial: /(?:s\/n|serial|n[úu]mero\s+de\s+serie|serie)[:\s]+([a-zA-Z0-9\-]+)/i,
+            // Manufacturing date (various formats)
+            date: /(?:fecha|date|fabricaci[óo]n|manufactured)[:\s]+(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}|\d{4})/i,
+            // Year only
+            year: /(?:a[ñn]o|year)[:\s]+(\d{4})/i,
+            // Pressure (for extinguishers)
+            pressure: /(?:presi[óo]n|pressure)[:\s]+([\d.]+)\s*(bar|psi|kg)/i,
+            // Capacity
+            capacity: /(?:capacidad|capacity)[:\s]+([\d.]+)\s*(kg|l|litros)/i
+        };
+
+        let foundData = {};
+
+        // Try to match patterns
+        for (const [key, pattern] of Object.entries(patterns)) {
+            for (const line of lines) {
+                const match = line.match(pattern);
+                if (match) {
+                    foundData[key] = match[1].trim();
+                    break;
+                }
+            }
+        }
+
+        // Also try heuristic approach for unstructured plates
+        // Look for common brand names
+        const commonBrands = ['KIDDE', 'GLORIA', 'VIKING', 'TYCO', 'ANSUL', 'FIRE', 'EXTINTOR', 'AMEREX', 'BADGER'];
+        for (const line of lines) {
+            for (const brand of commonBrands) {
+                if (line.toUpperCase().includes(brand)) {
+                    if (!foundData.brand && !foundData.manufacturer) {
+                        foundData.brand = brand;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Fill form fields
+        const manufacturerInput = document.getElementById('manufacturer');
+        const brandInput = document.getElementById('brand');
+        const modelInput = document.getElementById('model');
+        const manufacturingDateInput = document.getElementById('manufacturingDate');
+
+        let filled = 0;
+
+        if (foundData.manufacturer && manufacturerInput) {
+            manufacturerInput.value = foundData.manufacturer;
+            manufacturerInput.style.background = 'rgba(76, 175, 80, 0.1)';
+            setTimeout(() => { manufacturerInput.style.background = ''; }, 2000);
+            filled++;
+        }
+
+        if (foundData.brand && brandInput) {
+            brandInput.value = foundData.brand;
+            brandInput.style.background = 'rgba(76, 175, 80, 0.1)';
+            setTimeout(() => { brandInput.style.background = ''; }, 2000);
+            filled++;
+        }
+
+        if (foundData.model && modelInput) {
+            modelInput.value = foundData.model;
+            modelInput.style.background = 'rgba(76, 175, 80, 0.1)';
+            setTimeout(() => { modelInput.style.background = ''; }, 2000);
+            filled++;
+        }
+
+        // Parse date
+        if ((foundData.date || foundData.year) && manufacturingDateInput) {
+            let dateStr = foundData.date || `01/01/${foundData.year}`;
+
+            // Try to parse various date formats
+            const parsedDate = parseDate(dateStr);
+            if (parsedDate) {
+                manufacturingDateInput.value = parsedDate;
+                manufacturingDateInput.style.background = 'rgba(76, 175, 80, 0.1)';
+                setTimeout(() => { manufacturingDateInput.style.background = ''; }, 2000);
+                filled++;
+            }
+        }
+
+        if (filled === 0) {
+            showToast('No se detectaron campos automáticamente. Revisa el texto extraído.', 'warning');
+        } else {
+            showToast(`✓ ${filled} campo(s) rellenado(s) automáticamente`, 'success');
+        }
+    }
+
+    // Parse date from various formats
+    function parseDate(dateStr) {
+        // Try different formats
+        const formats = [
+            /(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/,  // DD/MM/YYYY or MM/DD/YYYY
+            /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,  // YYYY/MM/DD
+            /(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})/,  // DD/MM/YY
+        ];
+
+        for (const format of formats) {
+            const match = dateStr.match(format);
+            if (match) {
+                let year, month, day;
+
+                if (format === formats[0]) {
+                    // Could be DD/MM/YYYY or MM/DD/YYYY - assume DD/MM/YYYY (European format)
+                    day = match[1].padStart(2, '0');
+                    month = match[2].padStart(2, '0');
+                    year = match[3];
+                } else if (format === formats[1]) {
+                    // YYYY/MM/DD
+                    year = match[1];
+                    month = match[2].padStart(2, '0');
+                    day = match[3].padStart(2, '0');
+                } else {
+                    // DD/MM/YY
+                    day = match[1].padStart(2, '0');
+                    month = match[2].padStart(2, '0');
+                    year = '20' + match[3];  // Assume 20xx
+                }
+
+                // Validate the date is actually valid
+                const dateObj = new Date(`${year}-${month}-${day}`);
+                if (isNaN(dateObj.getTime())) {
+                    continue; // Invalid date, try next format
+                }
+
+                // Verify the components match (catches invalid dates like 31/02)
+                if (dateObj.getFullYear() !== parseInt(year) ||
+                    dateObj.getMonth() + 1 !== parseInt(month) ||
+                    dateObj.getDate() !== parseInt(day)) {
+                    continue; // Date components don't match, invalid
+                }
+
+                return `${year}-${month}-${day}`;
+            }
+        }
+
+        // If just a year
+        if (/^\d{4}$/.test(dateStr)) {
+            const year = parseInt(dateStr);
+            if (year >= 1900 && year <= 2100) {
+                return `${dateStr}-01-01`;
+            }
+        }
+
+        return null;
+    }
+
+    // Show OCR Error
+    function showOCRError(message) {
+        ocrError.style.display = 'block';
+        ocrResults.style.display = 'none';
+        ocrProcessing.style.display = 'none';
+        ocrErrorText.textContent = message;
+    }
+
+    // Reset OCR Modal
+    function resetOCRModal() {
+        ocrProcessing.style.display = 'none';
+        ocrResults.style.display = 'none';
+        ocrError.style.display = 'none';
+        captureCanvas.style.display = 'none';
+        cameraPreview.style.display = 'none';
+        cameraPlaceholder.style.display = 'flex';
+        capturePhotoBtn.style.display = 'none';
+        retryOCRBtn.style.display = 'none';
+        capturedImageData = null;
+    }
+});
 
 // ===== Chart Rendering =====
 function renderPressureChart(inspection) {
-    const ctx = document.getElementById('curveChart').getContext('2d');
+    const canvas = document.getElementById('curveChart');
+    if (!canvas) {
+        console.warn('Canvas element "curveChart" not found');
+        return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        console.error('Unable to get 2D context from canvas');
+        return;
+    }
 
     const nominalFlow = parseFloat(inspection.nominalFlow) || 0;
     const nominalPressure = parseFloat(inspection.nominalPressure) || 0;
@@ -1845,6 +2646,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== PHOTO CAPTURE FUNCTIONALITY =====
     let currentPhotosArray = [];  // Changed from single photo to array
+    let currentPhotoData = null;  // Legacy variable - declared for compatibility
     const MAX_PHOTOS = 5;
 
     // Function to compress image using Canvas API
@@ -1880,19 +2682,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     canvas.height = height;
 
                     const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        reject(new Error('No se pudo crear el contexto del canvas'));
+                        return;
+                    }
 
-                    // Optional: Fill background with white for transparent images
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.fillRect(0, 0, width, height);
+                    try {
+                        // Optional: Fill background with white for transparent images
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, width, height);
 
-                    // Draw image on canvas
-                    ctx.drawImage(img, 0, 0, width, height);
+                        // Draw image on canvas
+                        ctx.drawImage(img, 0, 0, width, height);
 
-                    // Convert to JPEG with specified quality
-                    canvas.toBlob(
-                        (blob) => {
-                            const compressedReader = new FileReader();
-                            compressedReader.onloadend = () => {
+                        // Convert to JPEG with specified quality
+                        canvas.toBlob(
+                            (blob) => {
+                                if (!blob) {
+                                    reject(new Error('Error al comprimir la imagen'));
+                                    return;
+                                }
+                                const compressedReader = new FileReader();
+                                compressedReader.onloadend = () => {
                                 const originalSizeKB = (file.size / 1024).toFixed(2);
                                 const compressedSizeKB = (blob.size / 1024).toFixed(2);
                                 const compressionRatio = ((1 - blob.size / file.size) * 100).toFixed(1);
@@ -1911,6 +2722,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         'image/jpeg',
                         quality
                     );
+                    } catch (error) {
+                        reject(new Error(`Error al procesar la imagen: ${error.message}`));
+                    }
                 };
                 img.onerror = () => reject(new Error('Error al cargar la imagen'));
                 img.src = e.target.result;
@@ -2064,7 +2878,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Modify submit button behavior
     const originalSubmitBtn = document.getElementById('submitBtn');
-    if (originalSubmitBtn) {
+    if (originalSubmitBtn && originalSubmitBtn.parentNode) {
         // Remove existing listener and add new one
         const newSubmitBtn = originalSubmitBtn.cloneNode(true);
         originalSubmitBtn.parentNode.replaceChild(newSubmitBtn, originalSubmitBtn);
@@ -2188,30 +3002,30 @@ document.addEventListener('DOMContentLoaded', () => {
             // Reset search
             searchInput.value = '';
 
-            // Remove previous listener if exists
-            const newSearchInput = searchInput.cloneNode(true);
-            searchInput.parentNode.replaceChild(newSearchInput, searchInput);
-
-            newSearchInput.addEventListener('input', (e) => {
-                const searchTerm = e.target.value;
-                const typeValue = typeFilter ? typeFilter.value : 'all';
-                filterEquipmentWithPhotos(searchTerm, typeValue, centerId);
-            });
+            // Only add listener if not already added (prevent memory leaks)
+            if (!searchInput.dataset.listenerAdded) {
+                searchInput.dataset.listenerAdded = 'true';
+                searchInput.addEventListener('input', (e) => {
+                    const searchTerm = e.target.value;
+                    const typeValue = typeFilter ? typeFilter.value : 'all';
+                    filterEquipmentWithPhotos(searchTerm, typeValue, centerId);
+                });
+            }
         }
 
         if (typeFilter) {
             // Reset filter
             typeFilter.value = 'all';
 
-            // Remove previous listener if exists
-            const newTypeFilter = typeFilter.cloneNode(true);
-            typeFilter.parentNode.replaceChild(newTypeFilter, typeFilter);
-
-            newTypeFilter.addEventListener('change', (e) => {
-                const typeValue = e.target.value;
-                const searchTerm = searchInput ? searchInput.value : '';
-                filterEquipmentWithPhotos(searchTerm, typeValue, centerId);
-            });
+            // Only add listener if not already added (prevent memory leaks)
+            if (!typeFilter.dataset.listenerAdded) {
+                typeFilter.dataset.listenerAdded = 'true';
+                typeFilter.addEventListener('change', (e) => {
+                    const typeValue = e.target.value;
+                    const searchTerm = searchInput ? searchInput.value : '';
+                    filterEquipmentWithPhotos(searchTerm, typeValue, centerId);
+                });
+            }
         }
     };
 
@@ -2394,46 +3208,152 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         // Add each equipment section
-        Object.keys(equipmentGroups).forEach(equipmentId => {
+        const pressureGroupsData = []; // Store pressure groups for chart rendering
+
+        Object.keys(equipmentGroups).forEach((equipmentId, index) => {
             const inspList = equipmentGroups[equipmentId];
             const latestInsp = inspList.sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0];
             const equipment = getEquipmentById(currentWorkCenter.id, equipmentId);
             const typeInfo = equipmentTypes[latestInsp.equipmentType];
 
             reportHTML += `
-                <div style="margin-bottom: 40px; page-break-inside: avoid;">
-                    <h3 style="color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
+                <div style="margin-bottom: 40px; page-break-inside: avoid; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <h3 style="color: #1e293b; border-bottom: 3px solid #ff6b35; padding-bottom: 10px; margin-bottom: 20px;">
                         ${typeInfo ? typeInfo.icon : '🔧'} ${typeInfo ? typeInfo.name : latestInsp.equipmentType} - ${equipmentId}
                     </h3>
-                    
-                    <div style="margin: 15px 0;">
-                        <p><strong>Ubicación:</strong> ${latestInsp.location || 'No especificada'}</p>
-                        <p><strong>Última inspección:</strong> ${new Date(latestInsp.inspectionDate).toLocaleDateString()}</p>
-                        <p><strong>Técnico:</strong> ${latestInsp.technician || 'No especificado'}</p>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; background: #f8fafc; padding: 15px; border-radius: 8px;">
+                        <div><strong style="color: #64748b;">📍 Ubicación:</strong> ${latestInsp.location || 'No especificada'}</div>
+                        <div><strong style="color: #64748b;">📅 Última inspección:</strong> ${new Date(latestInsp.inspectionDate).toLocaleDateString()}</div>
+                        <div><strong style="color: #64748b;">👤 Técnico:</strong> ${latestInsp.technician || 'No especificado'}</div>
+                        <div><strong style="color: #64748b;">📋 Inspecciones:</strong> ${inspList.length}</div>
                     </div>
-
-                    ${equipment && equipment.photo ? `
-                        <div style="margin: 15px 0;">
-                            <img src="${equipment.photo}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Foto del equipo">
-                        </div>
-                    ` : ''}
-                    
-                    ${latestInsp.photo && (!equipment || !equipment.photo) ? `
-                        <div style="margin: 15px 0;">
-                            <img src="${latestInsp.photo}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Foto de la inspección">
-                        </div>
-                    ` : ''}
-
-                    ${latestInsp.observations ? `
-                        <div style="margin: 15px 0; padding: 10px; background: #fef3c7; border-left: 3px solid #f59e0b;">
-                            <strong>Observaciones:</strong>
-                            <p style="margin: 5px 0 0 0;">${latestInsp.observations}</p>
-                        </div>
-                    ` : ''}
-
-                    <p style="margin-top: 10px;"><em>Historial: ${inspList.length} inspección(es)</em></p>
-                </div>
             `;
+
+            // PRESSURE GROUP SPECIFIC DATA
+            if (latestInsp.equipmentType === 'grupos-presion') {
+                const canvasId = `consolidatedChart_${index}`;
+                pressureGroupsData.push({ inspection: latestInsp, canvasId });
+
+                reportHTML += `
+                    <div style="margin: 20px 0; padding: 15px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                        <h4 style="margin: 0 0 15px 0; color: #1e40af;">⚙️ Datos Técnicos del Grupo de Presión</h4>
+
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px;">
+                            <div><strong>Caudal Nominal:</strong> ${latestInsp.nominalFlow || '-'} m³/h</div>
+                            <div><strong>Presión Nominal:</strong> ${latestInsp.nominalPressure || '-'} bar</div>
+                            <div><strong>Potencia:</strong> ${latestInsp.power || '-'} kW</div>
+                            <div><strong>RPM:</strong> ${latestInsp.rpm || '-'}</div>
+                        </div>
+
+                        <h4 style="margin: 15px 0 10px 0; color: #1e40af;">📊 Curva de Comportamiento</h4>
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <canvas id="${canvasId}" style="width: 100%; height: 300px;"></canvas>
+                        </div>
+
+                        <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; margin-top: 10px;">
+                            <thead>
+                                <tr style="background: #1e293b; color: white;">
+                                    <th style="padding: 10px; border: 1px solid #cbd5e1;">Punto de Prueba</th>
+                                    <th style="padding: 10px; border: 1px solid #cbd5e1;">Caudal</th>
+                                    <th style="padding: 10px; border: 1px solid #cbd5e1;">Presión</th>
+                                    <th style="padding: 10px; border: 1px solid #cbd5e1;">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="background: #f8fafc;">
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Caudal 0%</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">0 m³/h</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureZero || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">-</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Caudal 50%</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow ? (latestInsp.nominalFlow * 0.5).toFixed(1) : '-'} m³/h</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressure50 || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">-</td>
+                                </tr>
+                                <tr style="background: #f8fafc;">
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Caudal 100%</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow || '-'} m³/h</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureNominal || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">
+                                        <span style="color: ${latestInsp.pressureNominal >= latestInsp.nominalPressure ? '#10b981' : '#ef4444'}; font-weight: bold;">
+                                            ${latestInsp.pressureNominal >= latestInsp.nominalPressure ? '✓ CUMPLE' : '✗ NO CUMPLE'}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Sobrecarga 140%</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow ? (latestInsp.nominalFlow * 1.4).toFixed(1) : '-'} m³/h</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureOverload || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">
+                                        <span style="color: ${latestInsp.pressureOverload >= (latestInsp.nominalPressure * 0.7) ? '#10b981' : '#ef4444'}; font-weight: bold;">
+                                            ${latestInsp.pressureOverload >= (latestInsp.nominalPressure * 0.7) ? '✓ CUMPLE' : '✗ NO CUMPLE'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            // EQUIPMENT PHOTO
+            if (equipment && equipment.photo) {
+                reportHTML += `
+                    <div style="margin: 15px 0;">
+                        <h4 style="color: #64748b; margin-bottom: 8px;">📸 Foto del Equipo</h4>
+                        <img src="${equipment.photo}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Foto del equipo">
+                    </div>
+                `;
+            } else if (latestInsp.photo) {
+                reportHTML += `
+                    <div style="margin: 15px 0;">
+                        <h4 style="color: #64748b; margin-bottom: 8px;">📸 Foto de la Inspección</h4>
+                        <img src="${latestInsp.photo}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Foto de la inspección">
+                    </div>
+                `;
+            }
+
+            // CHECKLIST SUMMARY
+            if (latestInsp.checklist && latestInsp.checklist.length > 0) {
+                const okCount = latestInsp.checklist.filter(i => i.status === 'ok').length;
+                const warningCount = latestInsp.checklist.filter(i => i.status === 'warning').length;
+                const errorCount = latestInsp.checklist.filter(i => i.status === 'error').length;
+
+                reportHTML += `
+                    <div style="margin: 15px 0; padding: 12px; background: #f1f5f9; border-radius: 8px;">
+                        <h4 style="color: #475569; margin: 0 0 10px 0;">✅ Resultados de Inspección</h4>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <span style="width: 12px; height: 12px; background: #10b981; border-radius: 50%; display: inline-block;"></span>
+                                <span><strong>${okCount}</strong> Conforme${okCount !== 1 ? 's' : ''}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <span style="width: 12px; height: 12px; background: #f59e0b; border-radius: 50%; display: inline-block;"></span>
+                                <span><strong>${warningCount}</strong> Advertencia${warningCount !== 1 ? 's' : ''}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <span style="width: 12px; height: 12px; background: #ef4444; border-radius: 50%; display: inline-block;"></span>
+                                <span><strong>${errorCount}</strong> No Conforme${errorCount !== 1 ? 's' : ''}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // OBSERVATIONS
+            if (latestInsp.observations) {
+                reportHTML += `
+                    <div style="margin: 15px 0; padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                        <h4 style="margin: 0 0 8px 0; color: #92400e;">💬 Observaciones</h4>
+                        <p style="margin: 0; color: #78350f; line-height: 1.6;">${latestInsp.observations}</p>
+                    </div>
+                `;
+            }
+
+            reportHTML += `</div>`; // Close equipment section
         });
 
         reportHTML += '</div>';
@@ -2441,6 +3361,102 @@ document.addEventListener('DOMContentLoaded', () => {
         // Show in modal
         document.getElementById('reportContent').innerHTML = reportHTML;
         document.getElementById('reportModal').classList.add('active');
+
+        // Render pressure charts after modal is visible
+        setTimeout(() => {
+            pressureGroupsData.forEach(({ inspection, canvasId }) => {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) {
+                    console.warn(`Canvas ${canvasId} not found`);
+                    return;
+                }
+
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    console.error(`Unable to get context for ${canvasId}`);
+                    return;
+                }
+
+                // Render pressure chart
+                const nominalFlow = parseFloat(inspection.nominalFlow) || 0;
+                const nominalPressure = parseFloat(inspection.nominalPressure) || 0;
+
+                const dataPoints = [
+                    { x: 0, y: parseFloat(inspection.pressureZero) || 0 },
+                    { x: nominalFlow * 0.5, y: parseFloat(inspection.pressure50) || 0 },
+                    { x: nominalFlow, y: parseFloat(inspection.pressureNominal) || 0 },
+                    { x: nominalFlow * 1.4, y: parseFloat(inspection.pressureOverload) || 0 }
+                ];
+
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'Curva Real',
+                                data: dataPoints,
+                                borderColor: 'rgba(59, 130, 246, 1)',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderWidth: 3,
+                                pointRadius: 6,
+                                pointBackgroundColor: dataPoints.map((p, i) => {
+                                    if (i === 2 && p.y < nominalPressure) return '#ef4444';
+                                    if (i === 3 && p.y < nominalPressure * 0.7) return '#ef4444';
+                                    return '#10b981';
+                                }),
+                                fill: true,
+                                tension: 0.3
+                            },
+                            {
+                                label: 'Presión Nominal (Pn)',
+                                data: [{ x: 0, y: nominalPressure }, { x: nominalFlow * 1.5, y: nominalPressure }],
+                                borderColor: 'rgba(239, 68, 68, 0.8)',
+                                borderDash: [5, 5],
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                fill: false
+                            },
+                            {
+                                label: 'Límite 70% Pn',
+                                data: [{ x: 0, y: nominalPressure * 0.7 }, { x: nominalFlow * 1.5, y: nominalPressure * 0.7 }],
+                                borderColor: 'rgba(245, 158, 11, 0.8)',
+                                borderDash: [2, 2],
+                                borderWidth: 1,
+                                pointRadius: 0,
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: { font: { size: 12 } }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Curva Caudal vs Presión',
+                                font: { size: 14, weight: 'bold' }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: { display: true, text: 'Caudal (m³/h)' },
+                                min: 0
+                            },
+                            y: {
+                                type: 'linear',
+                                title: { display: true, text: 'Presión (bar)' },
+                                min: 0
+                            }
+                        }
+                    }
+                });
+            });
+        }, 200);
     }
 
     // Make function globally available
@@ -2565,8 +3581,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Render equipment type chart
     let equipmentTypeChartInstance = null;
     function renderEquipmentTypeChart(data) {
-        const ctx = document.getElementById('equipmentTypeChart');
-        if (!ctx) return;
+        const canvas = document.getElementById('equipmentTypeChart');
+        if (!canvas) {
+            console.warn('Canvas element "equipmentTypeChart" not found');
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            console.error('Unable to get 2D context from equipmentTypeChart canvas');
+            return;
+        }
 
         // Destroy previous chart if exists
         if (equipmentTypeChartInstance) {
@@ -2633,8 +3658,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Render inspection status chart
     let inspectionStatusChartInstance = null;
     function renderInspectionStatusChart(data) {
-        const ctx = document.getElementById('inspectionStatusChart');
-        if (!ctx) return;
+        const canvas = document.getElementById('inspectionStatusChart');
+        if (!canvas) {
+            console.warn('Canvas element "inspectionStatusChart" not found');
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            console.error('Unable to get 2D context from inspectionStatusChart canvas');
+            return;
+        }
 
         // Destroy previous chart if exists
         if (inspectionStatusChartInstance) {
@@ -3655,11 +4689,17 @@ document.addEventListener('DOMContentLoaded', () => {
         recognition.onend = () => {
             if (isRecording) {
                 // Auto-restart if still recording (for continuous mode)
-                try {
-                    recognition.start();
-                } catch (e) {
-                    stopRecording();
-                }
+                // Add delay to prevent "recognition already started" error
+                setTimeout(() => {
+                    if (isRecording) {
+                        try {
+                            recognition.start();
+                        } catch (e) {
+                            console.warn('Could not restart recognition:', e);
+                            stopRecording();
+                        }
+                    }
+                }, 100); // 100ms delay prevents race condition
             }
         };
     }
@@ -3868,39 +4908,92 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Reverse geocoding: Get address from coordinates
-    async function reverseGeocode(lat, lng, locationInput) {
+    async function reverseGeocode(lat, lng, locationInput, retries = 2) {
         try {
+            // Validate coordinates
+            if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+                console.error('Invalid coordinates for reverse geocoding:', { lat, lng });
+                return;
+            }
+
+            // Check coordinate bounds (lat: -90 to 90, lng: -180 to 180)
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                console.error('Coordinates out of valid range:', { lat, lng });
+                return;
+            }
+
             const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18`;
 
-            const response = await fetch(url, {
-                headers: { 'User-Agent': 'RETIMBRASUR-App' }
-            });
+            // Add timeout to fetch request (10 seconds)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-            if (!response.ok) throw new Error('Geocoding failed');
+            try {
+                const response = await fetch(url, {
+                    headers: { 'User-Agent': 'RETIMBRASUR-App' },
+                    signal: controller.signal
+                });
 
-            const data = await response.json();
+                clearTimeout(timeoutId);
 
-            if (data && data.address) {
-                const addr = data.address;
-                let parts = [];
-
-                if (addr.road) parts.push(addr.road);
-                if (addr.house_number) parts.push(addr.house_number);
-                if (addr.suburb) parts.push(addr.suburb);
-                if (addr.city || addr.town) parts.push(addr.city || addr.town);
-
-                const readable = parts.join(', ');
-
-                if (readable && !locationInput.value.includes(readable)) {
-                    const current = locationInput.value;
-                    locationInput.value = current.startsWith('GPS:') ?
-                        `${readable} (${current})` : readable;
-
-                    showToast('✓ Dirección obtenida', 'success');
+                // Handle rate limiting
+                if (response.status === 429) {
+                    console.warn('Nominatim rate limit exceeded. Retrying in 2 seconds...');
+                    if (retries > 0) {
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        return reverseGeocode(lat, lng, locationInput, retries - 1);
+                    }
+                    throw new Error('Rate limit exceeded');
                 }
+
+                if (!response.ok) {
+                    throw new Error(`Geocoding failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Check if geocoding returned an error
+                if (data.error) {
+                    console.warn('Geocoding API returned error:', data.error);
+                    return;
+                }
+
+                if (data && data.address) {
+                    const addr = data.address;
+                    let parts = [];
+
+                    if (addr.road) parts.push(addr.road);
+                    if (addr.house_number) parts.push(addr.house_number);
+                    if (addr.suburb) parts.push(addr.suburb);
+                    if (addr.city || addr.town) parts.push(addr.city || addr.town);
+
+                    const readable = parts.join(', ');
+
+                    if (readable && !locationInput.value.includes(readable)) {
+                        const current = locationInput.value;
+                        locationInput.value = current.startsWith('GPS:') ?
+                            `${readable} (${current})` : readable;
+
+                        showToast('✓ Dirección obtenida', 'success');
+                    }
+                } else {
+                    console.warn('No address data found in geocoding response');
+                }
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+
+                // Handle timeout
+                if (fetchError.name === 'AbortError') {
+                    console.warn('Reverse geocoding timeout after 10s');
+                    if (retries > 0) {
+                        return reverseGeocode(lat, lng, locationInput, retries - 1);
+                    }
+                }
+                throw fetchError;
             }
         } catch (error) {
-            console.warn('Reverse geocoding failed:', error);
+            console.warn('Reverse geocoding failed:', error.message || error);
+            // Silently fail - coordinates are still saved in the input field
         }
     }
 

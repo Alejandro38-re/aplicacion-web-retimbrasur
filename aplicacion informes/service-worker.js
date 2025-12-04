@@ -1,11 +1,15 @@
-const CACHE_NAME = 'retimbrasur-v1.0.0';
+const CACHE_NAME = 'retimbrasur-v2.0.0';
 const CACHE_ASSETS = [
   './index.html',
   './app.js',
   './styles.css',
   './manifest.json',
-  'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'
+  './icon-192.png',
+  './icon-512.png',
+  'https://cdn.jsdelivr.net/npm/chart.js',
+  'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js'
 ];
 
 // Install event - cache static assets
@@ -56,7 +60,8 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests
   if (!event.request.url.startsWith(self.location.origin) &&
       !event.request.url.includes('cdn.jsdelivr.net') &&
-      !event.request.url.includes('cdnjs.cloudflare.com')) {
+      !event.request.url.includes('cdnjs.cloudflare.com') &&
+      !event.request.url.includes('unpkg.com')) {
     return;
   }
 
