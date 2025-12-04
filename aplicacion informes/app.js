@@ -3208,46 +3208,152 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         // Add each equipment section
-        Object.keys(equipmentGroups).forEach(equipmentId => {
+        const pressureGroupsData = []; // Store pressure groups for chart rendering
+
+        Object.keys(equipmentGroups).forEach((equipmentId, index) => {
             const inspList = equipmentGroups[equipmentId];
             const latestInsp = inspList.sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0];
             const equipment = getEquipmentById(currentWorkCenter.id, equipmentId);
             const typeInfo = equipmentTypes[latestInsp.equipmentType];
 
             reportHTML += `
-                <div style="margin-bottom: 40px; page-break-inside: avoid;">
-                    <h3 style="color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">
+                <div style="margin-bottom: 40px; page-break-inside: avoid; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <h3 style="color: #1e293b; border-bottom: 3px solid #ff6b35; padding-bottom: 10px; margin-bottom: 20px;">
                         ${typeInfo ? typeInfo.icon : '🔧'} ${typeInfo ? typeInfo.name : latestInsp.equipmentType} - ${equipmentId}
                     </h3>
-                    
-                    <div style="margin: 15px 0;">
-                        <p><strong>Ubicación:</strong> ${latestInsp.location || 'No especificada'}</p>
-                        <p><strong>Última inspección:</strong> ${new Date(latestInsp.inspectionDate).toLocaleDateString()}</p>
-                        <p><strong>Técnico:</strong> ${latestInsp.technician || 'No especificado'}</p>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; background: #f8fafc; padding: 15px; border-radius: 8px;">
+                        <div><strong style="color: #64748b;">📍 Ubicación:</strong> ${latestInsp.location || 'No especificada'}</div>
+                        <div><strong style="color: #64748b;">📅 Última inspección:</strong> ${new Date(latestInsp.inspectionDate).toLocaleDateString()}</div>
+                        <div><strong style="color: #64748b;">👤 Técnico:</strong> ${latestInsp.technician || 'No especificado'}</div>
+                        <div><strong style="color: #64748b;">📋 Inspecciones:</strong> ${inspList.length}</div>
                     </div>
-
-                    ${equipment && equipment.photo ? `
-                        <div style="margin: 15px 0;">
-                            <img src="${equipment.photo}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Foto del equipo">
-                        </div>
-                    ` : ''}
-                    
-                    ${latestInsp.photo && (!equipment || !equipment.photo) ? `
-                        <div style="margin: 15px 0;">
-                            <img src="${latestInsp.photo}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Foto de la inspección">
-                        </div>
-                    ` : ''}
-
-                    ${latestInsp.observations ? `
-                        <div style="margin: 15px 0; padding: 10px; background: #fef3c7; border-left: 3px solid #f59e0b;">
-                            <strong>Observaciones:</strong>
-                            <p style="margin: 5px 0 0 0;">${latestInsp.observations}</p>
-                        </div>
-                    ` : ''}
-
-                    <p style="margin-top: 10px;"><em>Historial: ${inspList.length} inspección(es)</em></p>
-                </div>
             `;
+
+            // PRESSURE GROUP SPECIFIC DATA
+            if (latestInsp.equipmentType === 'grupos-presion') {
+                const canvasId = `consolidatedChart_${index}`;
+                pressureGroupsData.push({ inspection: latestInsp, canvasId });
+
+                reportHTML += `
+                    <div style="margin: 20px 0; padding: 15px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                        <h4 style="margin: 0 0 15px 0; color: #1e40af;">⚙️ Datos Técnicos del Grupo de Presión</h4>
+
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px;">
+                            <div><strong>Caudal Nominal:</strong> ${latestInsp.nominalFlow || '-'} m³/h</div>
+                            <div><strong>Presión Nominal:</strong> ${latestInsp.nominalPressure || '-'} bar</div>
+                            <div><strong>Potencia:</strong> ${latestInsp.power || '-'} kW</div>
+                            <div><strong>RPM:</strong> ${latestInsp.rpm || '-'}</div>
+                        </div>
+
+                        <h4 style="margin: 15px 0 10px 0; color: #1e40af;">📊 Curva de Comportamiento</h4>
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <canvas id="${canvasId}" style="width: 100%; height: 300px;"></canvas>
+                        </div>
+
+                        <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; margin-top: 10px;">
+                            <thead>
+                                <tr style="background: #1e293b; color: white;">
+                                    <th style="padding: 10px; border: 1px solid #cbd5e1;">Punto de Prueba</th>
+                                    <th style="padding: 10px; border: 1px solid #cbd5e1;">Caudal</th>
+                                    <th style="padding: 10px; border: 1px solid #cbd5e1;">Presión</th>
+                                    <th style="padding: 10px; border: 1px solid #cbd5e1;">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="background: #f8fafc;">
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Caudal 0%</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">0 m³/h</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureZero || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">-</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Caudal 50%</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow ? (latestInsp.nominalFlow * 0.5).toFixed(1) : '-'} m³/h</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressure50 || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">-</td>
+                                </tr>
+                                <tr style="background: #f8fafc;">
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Caudal 100%</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow || '-'} m³/h</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureNominal || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">
+                                        <span style="color: ${latestInsp.pressureNominal >= latestInsp.nominalPressure ? '#10b981' : '#ef4444'}; font-weight: bold;">
+                                            ${latestInsp.pressureNominal >= latestInsp.nominalPressure ? '✓ CUMPLE' : '✗ NO CUMPLE'}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1;"><strong>Sobrecarga 140%</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.nominalFlow ? (latestInsp.nominalFlow * 1.4).toFixed(1) : '-'} m³/h</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${latestInsp.pressureOverload || '-'} bar</td>
+                                    <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">
+                                        <span style="color: ${latestInsp.pressureOverload >= (latestInsp.nominalPressure * 0.7) ? '#10b981' : '#ef4444'}; font-weight: bold;">
+                                            ${latestInsp.pressureOverload >= (latestInsp.nominalPressure * 0.7) ? '✓ CUMPLE' : '✗ NO CUMPLE'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            // EQUIPMENT PHOTO
+            if (equipment && equipment.photo) {
+                reportHTML += `
+                    <div style="margin: 15px 0;">
+                        <h4 style="color: #64748b; margin-bottom: 8px;">📸 Foto del Equipo</h4>
+                        <img src="${equipment.photo}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Foto del equipo">
+                    </div>
+                `;
+            } else if (latestInsp.photo) {
+                reportHTML += `
+                    <div style="margin: 15px 0;">
+                        <h4 style="color: #64748b; margin-bottom: 8px;">📸 Foto de la Inspección</h4>
+                        <img src="${latestInsp.photo}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Foto de la inspección">
+                    </div>
+                `;
+            }
+
+            // CHECKLIST SUMMARY
+            if (latestInsp.checklist && latestInsp.checklist.length > 0) {
+                const okCount = latestInsp.checklist.filter(i => i.status === 'ok').length;
+                const warningCount = latestInsp.checklist.filter(i => i.status === 'warning').length;
+                const errorCount = latestInsp.checklist.filter(i => i.status === 'error').length;
+
+                reportHTML += `
+                    <div style="margin: 15px 0; padding: 12px; background: #f1f5f9; border-radius: 8px;">
+                        <h4 style="color: #475569; margin: 0 0 10px 0;">✅ Resultados de Inspección</h4>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <span style="width: 12px; height: 12px; background: #10b981; border-radius: 50%; display: inline-block;"></span>
+                                <span><strong>${okCount}</strong> Conforme${okCount !== 1 ? 's' : ''}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <span style="width: 12px; height: 12px; background: #f59e0b; border-radius: 50%; display: inline-block;"></span>
+                                <span><strong>${warningCount}</strong> Advertencia${warningCount !== 1 ? 's' : ''}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <span style="width: 12px; height: 12px; background: #ef4444; border-radius: 50%; display: inline-block;"></span>
+                                <span><strong>${errorCount}</strong> No Conforme${errorCount !== 1 ? 's' : ''}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // OBSERVATIONS
+            if (latestInsp.observations) {
+                reportHTML += `
+                    <div style="margin: 15px 0; padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                        <h4 style="margin: 0 0 8px 0; color: #92400e;">💬 Observaciones</h4>
+                        <p style="margin: 0; color: #78350f; line-height: 1.6;">${latestInsp.observations}</p>
+                    </div>
+                `;
+            }
+
+            reportHTML += `</div>`; // Close equipment section
         });
 
         reportHTML += '</div>';
@@ -3255,6 +3361,102 @@ document.addEventListener('DOMContentLoaded', () => {
         // Show in modal
         document.getElementById('reportContent').innerHTML = reportHTML;
         document.getElementById('reportModal').classList.add('active');
+
+        // Render pressure charts after modal is visible
+        setTimeout(() => {
+            pressureGroupsData.forEach(({ inspection, canvasId }) => {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) {
+                    console.warn(`Canvas ${canvasId} not found`);
+                    return;
+                }
+
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    console.error(`Unable to get context for ${canvasId}`);
+                    return;
+                }
+
+                // Render pressure chart
+                const nominalFlow = parseFloat(inspection.nominalFlow) || 0;
+                const nominalPressure = parseFloat(inspection.nominalPressure) || 0;
+
+                const dataPoints = [
+                    { x: 0, y: parseFloat(inspection.pressureZero) || 0 },
+                    { x: nominalFlow * 0.5, y: parseFloat(inspection.pressure50) || 0 },
+                    { x: nominalFlow, y: parseFloat(inspection.pressureNominal) || 0 },
+                    { x: nominalFlow * 1.4, y: parseFloat(inspection.pressureOverload) || 0 }
+                ];
+
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'Curva Real',
+                                data: dataPoints,
+                                borderColor: 'rgba(59, 130, 246, 1)',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderWidth: 3,
+                                pointRadius: 6,
+                                pointBackgroundColor: dataPoints.map((p, i) => {
+                                    if (i === 2 && p.y < nominalPressure) return '#ef4444';
+                                    if (i === 3 && p.y < nominalPressure * 0.7) return '#ef4444';
+                                    return '#10b981';
+                                }),
+                                fill: true,
+                                tension: 0.3
+                            },
+                            {
+                                label: 'Presión Nominal (Pn)',
+                                data: [{ x: 0, y: nominalPressure }, { x: nominalFlow * 1.5, y: nominalPressure }],
+                                borderColor: 'rgba(239, 68, 68, 0.8)',
+                                borderDash: [5, 5],
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                fill: false
+                            },
+                            {
+                                label: 'Límite 70% Pn',
+                                data: [{ x: 0, y: nominalPressure * 0.7 }, { x: nominalFlow * 1.5, y: nominalPressure * 0.7 }],
+                                borderColor: 'rgba(245, 158, 11, 0.8)',
+                                borderDash: [2, 2],
+                                borderWidth: 1,
+                                pointRadius: 0,
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: { font: { size: 12 } }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Curva Caudal vs Presión',
+                                font: { size: 14, weight: 'bold' }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                title: { display: true, text: 'Caudal (m³/h)' },
+                                min: 0
+                            },
+                            y: {
+                                type: 'linear',
+                                title: { display: true, text: 'Presión (bar)' },
+                                min: 0
+                            }
+                        }
+                    }
+                });
+            });
+        }, 200);
     }
 
     // Make function globally available
