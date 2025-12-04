@@ -2890,18 +2890,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add Next Equipment button (inline in form)
     if (addNextBtn) {
         addNextBtn.addEventListener('click', () => {
+            // Validate form before saving
+            if (!validateForm()) {
+                showToast('❌ Por favor completa todos los campos requeridos', 'error');
+                return;
+            }
+
+            // Save the inspection
             saveInspection('completed');
 
-            // Reset form and photo
+            // Show success message
+            showToast('✅ Inspección guardada correctamente', 'success');
+
+            // Reset form and photos
             resetInspectionForm();
             currentPhotoData = null;
+            currentPhotosArray = [];
             if (photoInput) photoInput.value = '';
             if (photoPreview) photoPreview.style.display = 'none';
+            renderPhotosGallery();
 
-            // Open equipment type modal
-            document.getElementById('newEquipmentModal').classList.add('active');
-
-            showToast('Inspección guardada. Selecciona el siguiente equipo', 'success');
+            // Open equipment type modal for next equipment
+            setTimeout(() => {
+                document.getElementById('newEquipmentModal').classList.add('active');
+                showToast('📋 Selecciona el siguiente equipo a inspeccionar', 'info');
+            }, 500);
         });
     }
 
