@@ -1,10 +1,10 @@
 // ===== RETIMBRASUR - Sistema de Inspección PCI =====
-const APP_VERSION = 'v2.0.3';
+const APP_VERSION = 'v2.0.4';
 console.log(`%c🔥 RETIMBRASUR ${APP_VERSION}`, 'color: #ff6b35; font-size: 16px; font-weight: bold;');
 console.log('%c✅ Cambios en esta versión:', 'color: #10b981; font-weight: bold;');
-console.log('   • CORREGIDO: TODO el texto del PDF ahora visible (#333)');
-console.log('   • Color agregado a tablas, títulos, observaciones, datos técnicos');
-console.log('   • Problema de texto blanco completamente resuelto');
+console.log('   • CORREGIDO: Resumen y Resultados de Inspección ahora visibles');
+console.log('   • Color agregado a contadores (Conforme, Advertencia, No Conforme)');
+console.log('   • Color agregado a datos de resumen del informe consolidado');
 
 // ===== AppSheet Integration =====
 // Parse URL parameters from AppSheet
@@ -3243,9 +3243,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 <div style="margin-bottom: 30px; padding: 15px; background: #f8fafc; border-left: 4px solid #ff6b35;">
                     <h3 style="margin-top: 0; color: #1e293b;">Resumen</h3>
-                    <p><strong>Total de equipos inspeccionados:</strong> ${Object.keys(equipmentGroups).length}</p>
-                    <p><strong>Total de inspecciones:</strong> ${centerInspections.length}</p>
-                    <p><strong>Cliente:</strong> ${currentWorkCenter.clientName || 'No especificado'}</p>
+                    <p style="color: #333;"><strong>Total de equipos inspeccionados:</strong> ${Object.keys(equipmentGroups).length}</p>
+                    <p style="color: #333;"><strong>Total de inspecciones:</strong> ${centerInspections.length}</p>
+                    <p style="color: #333;"><strong>Cliente:</strong> ${currentWorkCenter.clientName || 'No especificado'}</p>
                 </div>
         `;
 
@@ -3370,15 +3370,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                             <div style="display: flex; align-items: center; gap: 5px;">
                                 <span style="width: 12px; height: 12px; background: #10b981; border-radius: 50%; display: inline-block;"></span>
-                                <span><strong>${okCount}</strong> Conforme${okCount !== 1 ? 's' : ''}</span>
+                                <span style="color: #333;"><strong>${okCount}</strong> Conforme${okCount !== 1 ? 's' : ''}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 5px;">
                                 <span style="width: 12px; height: 12px; background: #f59e0b; border-radius: 50%; display: inline-block;"></span>
-                                <span><strong>${warningCount}</strong> Advertencia${warningCount !== 1 ? 's' : ''}</span>
+                                <span style="color: #333;"><strong>${warningCount}</strong> Advertencia${warningCount !== 1 ? 's' : ''}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 5px;">
                                 <span style="width: 12px; height: 12px; background: #ef4444; border-radius: 50%; display: inline-block;"></span>
-                                <span><strong>${errorCount}</strong> No Conforme${errorCount !== 1 ? 's' : ''}</span>
+                                <span style="color: #333;"><strong>${errorCount}</strong> No Conforme${errorCount !== 1 ? 's' : ''}</span>
                             </div>
                         </div>
                     </div>
