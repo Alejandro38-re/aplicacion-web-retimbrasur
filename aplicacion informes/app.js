@@ -1,10 +1,10 @@
 // ===== RETIMBRASUR - Sistema de Inspección PCI =====
-const APP_VERSION = 'v2.0.2';
+const APP_VERSION = 'v2.0.3';
 console.log(`%c🔥 RETIMBRASUR ${APP_VERSION}`, 'color: #ff6b35; font-size: 16px; font-weight: bold;');
 console.log('%c✅ Cambios en esta versión:', 'color: #10b981; font-weight: bold;');
-console.log('   • CORREGIDO: Textos ahora visibles con color oscuro (#333)');
-console.log('   • Agregado color explícito a todas las celdas de tabla');
-console.log('   • Problema de texto blanco sobre fondo blanco resuelto');
+console.log('   • CORREGIDO: TODO el texto del PDF ahora visible (#333)');
+console.log('   • Color agregado a tablas, títulos, observaciones, datos técnicos');
+console.log('   • Problema de texto blanco completamente resuelto');
 
 // ===== AppSheet Integration =====
 // Parse URL parameters from AppSheet
@@ -919,14 +919,14 @@ function generateReportHTML() {
                         <span style="color: #ff6b35; font-size: 20px; font-weight: 800;">RETIMBRASUR</span>
                     </div>
                 </div>
-                <h1 style="margin: 15px 0 0 0; font-size: 26px; font-weight: 800; letter-spacing: 1px;">INFORME DE INSPECCIÓN</h1>
-                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.95;">${equipment.name}</p>
+                <h1 style="margin: 15px 0 0 0; font-size: 26px; font-weight: 800; letter-spacing: 1px; color: #333;">INFORME DE INSPECCIÓN</h1>
+                <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.95; color: #333;">${equipment.name}</p>
             </div>
             
             ${inspection.clientName ? `
             <div style="margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
                 <h3 style="margin: 0 0 10px 0; color: #333;">Información del Cliente</h3>
-                <table style="width: 100%; border-collapse: collapse;">
+                <table style="width: 100%; border-collapse: collapse; color: #333;">
                     <tr>
                         <td style="padding: 8px; font-weight: bold; width: 40%;">Cliente:</td>
                         <td style="padding: 8px;">${inspection.clientName}</td>
@@ -961,7 +961,7 @@ function generateReportHTML() {
             
             <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
                 <h3 style="margin: 0 0 10px 0; color: #333;">Información del Equipo</h3>
-                <table style="width: 100%; border-collapse: collapse;">
+                <table style="width: 100%; border-collapse: collapse; color: #333;">
                     <tr>
                         <td style="padding: 8px; font-weight: bold; width: 40%;">ID del Equipo:</td>
                         <td style="padding: 8px;">${inspection.equipmentId}</td>
@@ -1017,7 +1017,7 @@ function generateReportHTML() {
             ${inspection.nominalFlow || inspection.nominalPressure ? `
             <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
                 <h3 style="margin: 0 0 10px 0; color: #333;">Datos Técnicos del Grupo de Presión</h3>
-                <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; color: #333;">
                     <tr>
                         <td style="padding: 8px; font-weight: bold; width: 33%;">Caudal Nominal:</td>
                         <td style="padding: 8px; width: 33%;">${inspection.nominalFlow || '-'} m³/h</td>
@@ -1097,7 +1097,7 @@ function generateReportHTML() {
             
             <div style="margin-bottom: 20px;">
                 <h3 style="margin: 0 0 10px 0; color: #333;">Lista de Verificación</h3>
-                <table style="width: 100%; border-collapse: collapse; background: white;">
+                <table style="width: 100%; border-collapse: collapse; background: white; color: #333;">
                     <thead>
                         <tr style="background: #333; color: white;">
                             <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Punto de Verificación</th>
@@ -1143,14 +1143,14 @@ function generateReportHTML() {
             ${inspection.observations ? `
                 <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #f59e0b;">
                     <h3 style="margin: 0 0 10px 0; color: #333;">Observaciones</h3>
-                    <p style="margin: 0; white-space: pre-wrap;">${inspection.observations}</p>
+                    <p style="margin: 0; white-space: pre-wrap; color: #333;">${inspection.observations}</p>
                 </div>
             ` : ''}
 
             ${inspection.recommendations ? `
                 <div style="margin-bottom: 20px; padding: 15px; background: #dbeafe; border-radius: 8px; border-left: 4px solid #3b82f6;">
                     <h3 style="margin: 0 0 10px 0; color: #333;">Recomendaciones</h3>
-                    <p style="margin: 0; white-space: pre-wrap;">${inspection.recommendations}</p>
+                    <p style="margin: 0; white-space: pre-wrap; color: #333;">${inspection.recommendations}</p>
                 </div>
             ` : ''}
 
@@ -3264,7 +3264,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${typeInfo ? typeInfo.icon : '🔧'} ${typeInfo ? typeInfo.name : latestInsp.equipmentType} - ${equipmentId}
                     </h3>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; background: #f8fafc; padding: 15px; border-radius: 8px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; background: #f8fafc; padding: 15px; border-radius: 8px; color: #333;">
                         <div><strong style="color: #64748b;">📍 Ubicación:</strong> ${latestInsp.location || 'No especificada'}</div>
                         <div><strong style="color: #64748b;">📅 Última inspección:</strong> ${new Date(latestInsp.inspectionDate).toLocaleDateString()}</div>
                         <div><strong style="color: #64748b;">👤 Técnico:</strong> ${latestInsp.technician || 'No especificado'}</div>
@@ -3281,7 +3281,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="margin: 20px 0; padding: 15px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
                         <h4 style="margin: 0 0 15px 0; color: #1e40af;">⚙️ Datos Técnicos del Grupo de Presión</h4>
 
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px;">
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; color: #333;">
                             <div><strong>Caudal Nominal:</strong> ${latestInsp.nominalFlow || '-'} m³/h</div>
                             <div><strong>Presión Nominal:</strong> ${latestInsp.nominalPressure || '-'} bar</div>
                             <div><strong>Potencia:</strong> ${latestInsp.power || '-'} kW</div>
