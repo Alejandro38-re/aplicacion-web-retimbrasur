@@ -37,7 +37,7 @@
                 <img src="Logo sin fondo.png" alt="Logo Empresa" class="logo-image">
                 <div>
                     <h1>Sistema de Inspección PCI</h1>
-                    <span class="version-badge">v2.2.2</span>
+                    <span class="version-badge">v2.2.3</span>
                 </div>
             </div>
             <div class="header-actions">
@@ -840,11 +840,33 @@
                             const newWorker = registration.installing;
                             newWorker.addEventListener('statechange', () => {
                                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // New service worker available
-                                    if (confirm('Hay una nueva versión disponible. ¿Deseas actualizar?')) {
+                                    // New service worker available - auto-update
+                                    console.log('🔄 Nueva versión detectada, actualizando automáticamente...');
+
+                                    // Show notification
+                                    const notification = document.createElement('div');
+                                    notification.style.cssText = `
+                                        position: fixed;
+                                        top: 80px;
+                                        left: 50%;
+                                        transform: translateX(-50%);
+                                        background: linear-gradient(135deg, #10b981, #059669);
+                                        color: white;
+                                        padding: 15px 25px;
+                                        border-radius: 12px;
+                                        box-shadow: 0 4px 20px rgba(16, 185, 129, 0.5);
+                                        z-index: 99999;
+                                        font-weight: 600;
+                                        text-align: center;
+                                    `;
+                                    notification.innerHTML = '🔄 Actualizando a la última versión...';
+                                    document.body.appendChild(notification);
+
+                                    // Auto-update after 1 second
+                                    setTimeout(() => {
                                         newWorker.postMessage({ type: 'SKIP_WAITING' });
                                         window.location.reload();
-                                    }
+                                    }, 1000);
                                 }
                             });
                         });
