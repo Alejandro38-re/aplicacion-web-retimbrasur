@@ -856,7 +856,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Auto-create and select work center if provided
         if (appSheetData.workCenter) {
-            console.log('Auto-creating/selecting work center:', appSheetData.workCenter);
+            console.log('🏢 Auto-creating/selecting work center:', appSheetData.workCenter);
+            console.log('📊 Current work centers:', workCenters);
+
+            // Reload work centers from localStorage to ensure we have latest data
+            workCenters = loadWorkCenters();
 
             // Check if center already exists
             let existingCenter = workCenters.find(c =>
@@ -865,7 +869,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // If center doesn't exist, create it
             if (!existingCenter) {
-                console.log('Work center does not exist, creating new one...');
+                console.log('✨ Work center does not exist, creating new one...');
                 const newCenter = {
                     id: Date.now().toString(),
                     name: appSheetData.workCenter,
@@ -879,21 +883,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 existingCenter = saveWorkCenter(newCenter);
-                console.log('Work center created:', existingCenter);
+                console.log('✅ Work center created successfully:', existingCenter);
 
-                // Refresh work centers list and reload select
-                loadWorkCenters();
+                // Add visual notification
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 80px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+                    z-index: 10000;
+                    font-weight: 600;
+                    animation: slideIn 0.3s ease-out;
+                `;
+                notification.innerHTML = `✅ Centro creado: ${existingCenter.name}`;
+                document.body.appendChild(notification);
+                setTimeout(() => notification.remove(), 3000);
+
+                // Refresh work centers list
+                workCenters = loadWorkCenters();
+            } else {
+                console.log('ℹ️ Work center already exists:', existingCenter.name);
             }
 
-            // Auto-select the center
+            // Populate the select dropdown with updated centers
             setTimeout(() => {
+                populateCenterDropdown();
+
+                // Auto-select the center
                 const centerSelect = document.getElementById('centerSelect');
                 if (centerSelect && existingCenter) {
                     centerSelect.value = existingCenter.id;
                     centerSelect.dispatchEvent(new Event('change'));
-                    console.log('Work center auto-selected:', existingCenter.name);
+                    console.log('🎯 Work center auto-selected:', existingCenter.name);
                 }
-            }, 100);
+            }, 200);
         }
     }
 });
