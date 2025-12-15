@@ -843,6 +843,35 @@ document.addEventListener('DOMContentLoaded', () => {
             startInspection(type);
         });
     });
+
+    // Display AppSheet info on home screen if coming from AppSheet
+    console.log('Checking AppSheet parameters...', appSheetData);
+    if (appSheetData.appsheetMode) {
+        console.log('AppSheet mode detected, displaying info on home screen');
+        const appsheetInfoHome = document.getElementById('appsheetInfoHome');
+        if (appsheetInfoHome) {
+            appsheetInfoHome.innerHTML = displayContactAndPaymentInfo();
+            console.log('AppSheet info displayed on home screen');
+        }
+
+        // Auto-select work center if provided
+        if (appSheetData.workCenter) {
+            console.log('Auto-selecting work center:', appSheetData.workCenter);
+            const centerSelect = document.getElementById('centerSelect');
+            if (centerSelect) {
+                // Try to find and select the center
+                const options = Array.from(centerSelect.options);
+                const matchingOption = options.find(opt =>
+                    opt.text.toLowerCase().includes(appSheetData.workCenter.toLowerCase())
+                );
+                if (matchingOption) {
+                    centerSelect.value = matchingOption.value;
+                    centerSelect.dispatchEvent(new Event('change'));
+                    console.log('Work center auto-selected');
+                }
+            }
+        }
+    }
 });
 
 function startInspection(type) {
