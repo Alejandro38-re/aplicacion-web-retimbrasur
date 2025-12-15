@@ -1,10 +1,13 @@
 // ===== RETIMBRASUR - Sistema de Inspección PCI =====
-const APP_VERSION = 'v2.0.4';
+const APP_VERSION = 'v2.1.0';
 console.log(`%c🔥 RETIMBRASUR ${APP_VERSION}`, 'color: #ff6b35; font-size: 16px; font-weight: bold;');
 console.log('%c✅ Cambios en esta versión:', 'color: #10b981; font-weight: bold;');
-console.log('   • CORREGIDO: Resumen y Resultados de Inspección ahora visibles');
-console.log('   • Color agregado a contadores (Conforme, Advertencia, No Conforme)');
-console.log('   • Color agregado a datos de resumen del informe consolidado');
+console.log('   • ✨ MEJORAS VISUALES para tablets y móviles:');
+console.log('   • 📱 Botones más grandes (56px altura mínima) para tablets');
+console.log('   • ☑️ Checkboxes más grandes (32px) con estados visuales de color');
+console.log('   • 🖼️ Galería de fotos mejorada con grid responsive (180px en tablets)');
+console.log('   • 📝 Campos de formulario más grandes para mejor usabilidad táctil');
+console.log('   • 🎨 Indicadores visuales: verde (Conforme), amarillo (Advertencia), rojo (No Conforme)');
 
 // ===== AppSheet Integration =====
 // Parse URL parameters from AppSheet
@@ -703,8 +706,29 @@ function generateChecklist(items) {
     });
 
     container.querySelectorAll('.status-select').forEach(select => {
-        select.addEventListener('change', updateProgress);
+        select.addEventListener('change', function() {
+            updateProgress();
+            updateChecklistItemVisualState(this);
+        });
     });
+}
+
+// Update visual state of checklist item based on select value
+function updateChecklistItemVisualState(selectElement) {
+    const checklistItem = selectElement.closest('.checklist-item');
+    const value = selectElement.value;
+
+    // Remove all state classes
+    checklistItem.classList.remove('state-ok', 'state-warning', 'state-error');
+
+    // Add appropriate state class
+    if (value === 'ok') {
+        checklistItem.classList.add('state-ok');
+    } else if (value === 'warning') {
+        checklistItem.classList.add('state-warning');
+    } else if (value === 'error') {
+        checklistItem.classList.add('state-error');
+    }
 }
 
 function updateProgress() {
@@ -1388,7 +1412,11 @@ function viewInspection(id) {
         const select = document.querySelector(`.status-select[data-index="${index}"]`);
 
         if (checkbox) checkbox.checked = item.checked;
-        if (select) select.value = item.status;
+        if (select) {
+            select.value = item.status;
+            // Restore visual state
+            updateChecklistItemVisualState(select);
+        }
     });
 
     updateProgress();

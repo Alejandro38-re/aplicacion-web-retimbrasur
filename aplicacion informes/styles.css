@@ -489,6 +489,71 @@ body {
     accent-color: var(--primary-color);
 }
 
+/* Visual State Indicators for Checklist Items */
+.checklist-item.state-ok {
+    background: rgba(16, 185, 129, 0.06);
+    border-left: 4px solid var(--success);
+}
+
+.checklist-item.state-ok:hover {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: var(--success);
+}
+
+.checklist-item.state-warning {
+    background: rgba(245, 158, 11, 0.06);
+    border-left: 4px solid var(--warning);
+}
+
+.checklist-item.state-warning:hover {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: var(--warning);
+}
+
+.checklist-item.state-error {
+    background: rgba(239, 68, 68, 0.06);
+    border-left: 4px solid var(--error);
+}
+
+.checklist-item.state-error:hover {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: var(--error);
+}
+
+/* Enhanced Select Dropdown in Checklist */
+.checklist-item select {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 1rem;
+    color: var(--text-primary);
+    min-width: 140px;
+    font-weight: 600;
+    transition: all var(--transition-normal);
+}
+
+.checklist-item select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.2);
+}
+
+/* Color-coded select options */
+.checklist-item select option[value="✅ Conforme"] {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--success);
+}
+
+.checklist-item select option[value="⚠️ Advertencia"] {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--warning);
+}
+
+.checklist-item select option[value="❌ No Conforme"] {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--error);
+}
+
 /* ===== Modal ===== */
 .modal {
     display: none;
@@ -1491,6 +1556,112 @@ body {
 }
 
 /* ===== Responsive ===== */
+
+/* Tablet and Mobile Touch Improvements */
+@media (max-width: 1024px) {
+    /* Larger Buttons for Touch Devices */
+    .btn {
+        padding: 1.2rem 2rem;
+        min-height: 56px;
+        font-size: 1.05rem;
+    }
+
+    .btn-sm {
+        padding: 0.9rem 1.5rem;
+        min-height: 48px;
+        font-size: 1rem;
+    }
+
+    /* Larger Checklist Items */
+    .checklist-item {
+        padding: 1.5rem;
+        min-height: 70px;
+    }
+
+    .checklist-item label {
+        font-size: 1.1rem;
+    }
+
+    /* Larger Checkboxes with Visual State */
+    .checklist-item input[type="checkbox"] {
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        accent-color: var(--primary-color);
+        border-radius: 6px;
+    }
+
+    /* Visual State for Checked Items */
+    .checklist-item:has(input[type="checkbox"]:checked) {
+        background: rgba(16, 185, 129, 0.08);
+        border-color: var(--success);
+    }
+
+    .checklist-item:has(input[type="checkbox"]:checked) label {
+        color: var(--success);
+    }
+
+    /* Larger Form Controls */
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 1.2rem;
+        font-size: 1.05rem;
+        min-height: 56px;
+    }
+
+    .form-group textarea {
+        min-height: 120px;
+    }
+
+    /* Improved Photo Grid for Tablets */
+    .photos-gallery {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: var(--spacing-lg);
+    }
+
+    .photo-thumbnail {
+        border-width: 3px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .photo-thumbnail:hover {
+        transform: scale(1.08);
+        box-shadow: 0 8px 20px rgba(255, 107, 53, 0.4);
+    }
+
+    .btn-remove-photo-thumb {
+        width: 36px;
+        height: 36px;
+        font-size: 1.2rem;
+        opacity: 1; /* Always visible on touch devices */
+    }
+
+    /* Larger Equipment Cards */
+    .equipment-card {
+        padding: var(--spacing-xl);
+    }
+
+    /* Improved Touch Targets for Signature */
+    .signature-canvas {
+        height: 250px;
+        touch-action: none;
+    }
+
+    /* Better spacing for filter controls */
+    .filter-select {
+        padding: 1rem 1.2rem;
+        font-size: 1.05rem;
+        min-height: 56px;
+    }
+
+    /* Larger action buttons in modals */
+    .modal-footer .btn {
+        padding: 1.2rem 2rem;
+        min-height: 56px;
+    }
+}
+
 @media (max-width: 768px) {
     .header-content {
         flex-direction: column;
@@ -1535,6 +1706,22 @@ body {
 
     .equipment-photo-preview,
     .equipment-photo-placeholder {
-        height: 120px;
+        height: 140px;
+    }
+
+    /* Mobile: Smaller photo grid but still comfortable */
+    .photos-gallery {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: var(--spacing-md);
+    }
+
+    /* Signature canvas full height on mobile */
+    .signature-canvas {
+        height: 220px;
+    }
+
+    /* Signatures in single column on mobile */
+    .signatures-grid {
+        grid-template-columns: 1fr;
     }
 }
