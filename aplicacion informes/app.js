@@ -1,5 +1,5 @@
 // ===== RETIMBRASUR - Sistema de Inspección PCI =====
-const APP_VERSION = 'v2.2.2';
+const APP_VERSION = 'v2.2.3';
 console.log(`%c🔥 RETIMBRASUR ${APP_VERSION}`, 'color: #ff6b35; font-size: 16px; font-weight: bold;');
 console.log('%c✅ Cambios en esta versión:', 'color: #10b981; font-weight: bold;');
 console.log('   • 👤 INFORMACIÓN DE CONTACTO Y PAGO:');
