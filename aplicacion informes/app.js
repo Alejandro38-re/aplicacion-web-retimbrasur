@@ -1,13 +1,14 @@
 // ===== RETIMBRASUR - Sistema de Inspección PCI =====
-const APP_VERSION = 'v2.2.0';
+const APP_VERSION = 'v2.2.1';
 console.log(`%c🔥 RETIMBRASUR ${APP_VERSION}`, 'color: #ff6b35; font-size: 16px; font-weight: bold;');
 console.log('%c✅ Cambios en esta versión:', 'color: #10b981; font-weight: bold;');
-console.log('   • 📅 SINCRONIZACIÓN CON APPSHEET:');
-console.log('   • ↔️ Sincronización bidireccional de fechas de mantenimiento');
-console.log('   • 📍 Campos sincronizados: CENTRO, FECHA, PRÓXIMO MANTENIMIENTO');
-console.log('   • 🔔 Alertas de caducidad de mantenimiento (Vigente/Próximo/Vencido)');
-console.log('   • 📊 Cálculo automático basado en tipo (TRIMESTRAL, SEMESTRAL, ANUAL)');
-console.log('   • ⚠️ Badges visuales: verde (>30 días), amarillo (≤30 días), rojo (vencido)');
+console.log('   • 👤 INFORMACIÓN DE CONTACTO Y PAGO:');
+console.log('   • 📞 Card de contacto con botón de llamada directa');
+console.log('   • 💰 Importe del mantenimiento visible');
+console.log('   • 💵 Badge destacado para PAGO EN EFECTIVO (parpadeante)');
+console.log('   • 📧 Botón de email directo al contacto');
+console.log('   • 📝 Pre-llenado de observaciones con datos previos');
+console.log('   • ↔️ Sincronización completa de todos los campos con AppSheet');
 
 // ===== AppSheet Integration =====
 // Parse URL parameters from AppSheet
@@ -38,6 +39,15 @@ function getURLParameters() {
         nextMaintenanceDate: params.get('nextMaintenanceDate') || params.get('proximoMantenimiento') || '', // PRÓXIMO MANTENIMIENTO field
         maintenanceType: params.get('maintenanceType') || params.get('mant') || '', // MANT field (TRIMESTRAL, SEMESTRAL, ANUAL)
         maintenanceRowNumber: params.get('maintenanceRowNumber') || params.get('rowNumber') || '', // _RowNumber for update
+
+        // Contact and Payment Info (ALTA PRIORIDAD)
+        contactName: params.get('contactName') || params.get('contacto') || '', // CONTACTO field
+        contactPhone: params.get('contactPhone') || params.get('telefono') || '', // TELEFONO field
+        contactEmail: params.get('contactEmail') || params.get('email') || '', // EMAIL field
+        maintenanceAmount: params.get('maintenanceAmount') || params.get('importe') || '', // IMPORTE field
+        cashPayment: params.get('cashPayment') || params.get('pagoEfectivo') || '', // PAGO EFECTIVO field (Yes/No/Sí/No)
+        previousObservations: params.get('previousObservations') || params.get('observacionesPrevias') || params.get('observaciones') || '', // OBSERVACIONES previas
+        maintenanceProgress: params.get('maintenanceProgress') || params.get('progreso') || '', // PROGRESO field
 
         // AppSheet callback URL
         returnUrl: params.get('returnUrl') || '',
@@ -117,6 +127,159 @@ function getDaysUntilMaintenance(nextMaintenanceDate) {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
+// ===== Contact and Payment Info Display =====
+// Display contact and payment information in inspection screen
+function displayContactAndPaymentInfo() {
+    // Check if we have contact or payment info from AppSheet
+    const hasContactInfo = appSheetData.contactName || appSheetData.contactPhone || appSheetData.contactEmail;
+    const hasPaymentInfo = appSheetData.maintenanceAmount || appSheetData.cashPayment;
+    const hasMaintenanceInfo = appSheetData.lastMaintenanceDate || appSheetData.nextMaintenanceDate;
+
+    if (!hasContactInfo && !hasPaymentInfo && !hasMaintenanceInfo) {
+        return ''; // No info to display
+    }
+
+    // Check if cash payment is YES (handle different formats: Yes, Sí, SI, YES, etc.)
+    const isCashPayment = appSheetData.cashPayment &&
+        ['yes', 'sí', 'si', 'true', '1'].includes(appSheetData.cashPayment.toLowerCase().trim());
+
+    let html = '<div class="contact-payment-info-container">';
+
+    // Contact Information Card
+    if (hasContactInfo) {
+        html += `
+            <div class="info-card contact-info-card">
+                <h3 class="info-card-title">
+                    <span class="icon">👤</span> Información de Contacto
+                </h3>
+                <div class="info-card-content">
+        `;
+
+        if (appSheetData.contactName) {
+            html += `
+                <div class="info-row">
+                    <span class="info-label">Contacto:</span>
+                    <span class="info-value">${appSheetData.contactName}</span>
+                </div>
+            `;
+        }
+
+        if (appSheetData.contactPhone) {
+            html += `
+                <div class="info-row">
+                    <span class="info-label">Teléfono:</span>
+                    <span class="info-value">
+                        <a href="tel:${appSheetData.contactPhone}" class="phone-link">
+                            <span class="icon">📞</span> ${appSheetData.contactPhone}
+                        </a>
+                    </span>
+                </div>
+            `;
+        }
+
+        if (appSheetData.contactEmail) {
+            html += `
+                <div class="info-row">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">
+                        <a href="mailto:${appSheetData.contactEmail}" class="email-link">
+                            <span class="icon">✉️</span> ${appSheetData.contactEmail}
+                        </a>
+                    </span>
+                </div>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    // Payment and Maintenance Info Card
+    if (hasPaymentInfo || hasMaintenanceInfo) {
+        html += `
+            <div class="info-card payment-info-card">
+                <h3 class="info-card-title">
+                    <span class="icon">💰</span> Información de Mantenimiento
+                </h3>
+                <div class="info-card-content">
+        `;
+
+        if (appSheetData.maintenanceAmount) {
+            html += `
+                <div class="info-row amount-row">
+                    <span class="info-label">Importe:</span>
+                    <span class="info-value amount-value">${appSheetData.maintenanceAmount} €</span>
+                </div>
+            `;
+        }
+
+        if (appSheetData.cashPayment) {
+            const cashPaymentClass = isCashPayment ? 'cash-payment-yes' : 'cash-payment-no';
+            const cashPaymentText = isCashPayment ? '💵 PAGO EN EFECTIVO' : '💳 Pago NO en efectivo';
+            html += `
+                <div class="info-row payment-method-row">
+                    <div class="cash-payment-badge ${cashPaymentClass}">
+                        ${cashPaymentText}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (appSheetData.maintenanceType) {
+            html += `
+                <div class="info-row">
+                    <span class="info-label">Tipo:</span>
+                    <span class="info-value">${appSheetData.maintenanceType}</span>
+                </div>
+            `;
+        }
+
+        if (appSheetData.lastMaintenanceDate) {
+            html += `
+                <div class="info-row">
+                    <span class="info-label">Último mantenimiento:</span>
+                    <span class="info-value">${formatDate(appSheetData.lastMaintenanceDate)}</span>
+                </div>
+            `;
+        }
+
+        if (appSheetData.nextMaintenanceDate) {
+            const status = getMaintenanceStatus(appSheetData.nextMaintenanceDate);
+            const daysUntil = getDaysUntilMaintenance(appSheetData.nextMaintenanceDate);
+            let statusBadge = '';
+
+            if (status === 'overdue') {
+                statusBadge = `<span class="status-badge status-overdue">⚠️ Vencido (${Math.abs(daysUntil)} días)</span>`;
+            } else if (status === 'warning') {
+                statusBadge = `<span class="status-badge status-warning">⏰ Próximo (${daysUntil} días)</span>`;
+            } else {
+                statusBadge = `<span class="status-badge status-ok">✓ Vigente</span>`;
+            }
+
+            html += `
+                <div class="info-row">
+                    <span class="info-label">Próximo mantenimiento:</span>
+                    <span class="info-value">
+                        ${formatDate(appSheetData.nextMaintenanceDate)}
+                        ${statusBadge}
+                    </span>
+                </div>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+
+    return html;
+}
+
 // Function to send data back to AppSheet
 function sendDataToAppSheet(inspection) {
     if (!appSheetData.returnUrl) {
@@ -148,6 +311,14 @@ function sendDataToAppSheet(inspection) {
         fecha: inspection.inspectionDate, // Update FECHA with current inspection date
         proximoMantenimiento: nextMaintenance, // Send back (AppSheet will recalculate if needed)
         mant: inspection.maintenanceType || appSheetData.maintenanceType,
+
+        // Contact and Payment Info (sent back for confirmation)
+        contacto: appSheetData.contactName,
+        telefono: appSheetData.contactPhone,
+        email: appSheetData.contactEmail,
+        importe: appSheetData.maintenanceAmount,
+        pagoEfectivo: appSheetData.cashPayment,
+        progreso: 'COMPLETADO', // Update progress to COMPLETADO
 
         // Results summary
         totalItems: inspection.checklist.length,
@@ -746,6 +917,21 @@ function startInspection(type) {
     // Reset form
     console.log('Resetting form...');
     resetInspectionForm();
+
+    // Display contact and payment info from AppSheet
+    console.log('Displaying contact and payment info...');
+    const contactPaymentContainer = document.getElementById('contactPaymentInfoContainer');
+    if (contactPaymentContainer) {
+        contactPaymentContainer.innerHTML = displayContactAndPaymentInfo();
+    }
+
+    // Pre-fill observations with previous observations from AppSheet
+    if (appSheetData.previousObservations) {
+        const observationsField = document.getElementById('observations');
+        if (observationsField) {
+            observationsField.value = `Observaciones previas:\n${appSheetData.previousObservations}\n\n--- Nueva inspección ---\n`;
+        }
+    }
 
     console.log('Showing inspection screen...');
     showScreen('inspection');
