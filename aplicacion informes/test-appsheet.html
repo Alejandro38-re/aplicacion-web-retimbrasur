@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test AppSheet URL - RETIMBRASUR</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #ff6b35;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .section h2 {
+            color: #10b981;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .param-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            margin-bottom: 5px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            border-left: 3px solid #ff6b35;
+        }
+
+        .param-name {
+            font-weight: bold;
+            color: #ff6b35;
+        }
+
+        .param-value {
+            color: #10b981;
+            word-break: break-all;
+            max-width: 60%;
+            text-align: right;
+        }
+
+        .param-value.empty {
+            color: #ef4444;
+            font-style: italic;
+        }
+
+        .url-display {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 8px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+            color: #10b981;
+        }
+
+        .status {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .status.success {
+            background: rgba(16, 185, 129, 0.2);
+            border: 2px solid #10b981;
+            color: #10b981;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid #ef4444;
+            color: #ef4444;
+        }
+
+        .status.warning {
+            background: rgba(245, 158, 11, 0.2);
+            border: 2px solid #f59e0b;
+            color: #f59e0b;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #ff6b35 0%, #f59e0b 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            text-decoration: none;
+            text-align: center;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Diagnóstico AppSheet URL</h1>
+
+        <div id="statusContainer"></div>
+
+        <div class="section">
+            <h2>📍 URL Completa Recibida:</h2>
+            <div class="url-display" id="fullUrl"></div>
+        </div>
+
+        <div class="section">
+            <h2>📊 Parámetros Detectados:</h2>
+            <div id="paramsContainer"></div>
+        </div>
+
+        <div class="section">
+            <h2>📋 Resumen:</h2>
+            <div id="summaryContainer"></div>
+        </div>
+
+        <a href="index.html" class="btn">← Volver a la App Principal</a>
+    </div>
+
+    <script>
+        // Get URL parameters
+        const params = new URLSearchParams(window.location.search);
+        const allParams = {};
+
+        // List of expected parameters
+        const expectedParams = [
+            'centro', 'contacto', 'telefono', 'email', 'mant',
+            'importe', 'fecha', 'proximoMantenimiento', 'pagoEfectivo',
+            'observaciones', 'progreso', 'rowNumber', 'appsheetMode'
+        ];
+
+        // Parse all parameters
+        params.forEach((value, key) => {
+            allParams[key] = value;
+        });
+
+        // Display full URL
+        document.getElementById('fullUrl').textContent = window.location.href;
+
+        // Count parameters
+        const totalParams = Object.keys(allParams).length;
+        const emptyParams = expectedParams.filter(p => !allParams[p] || allParams[p] === '');
+
+        // Display status
+        let statusHtml = '';
+        if (totalParams === 0) {
+            statusHtml = '<div class="status error">❌ NO SE RECIBIERON PARÁMETROS</div>';
+            statusHtml += '<p style="text-align: center; margin-top: 10px;">La URL no contiene datos de AppSheet.</p>';
+        } else if (emptyParams.length > 0) {
+            statusHtml = '<div class="status warning">⚠️ SE RECIBIERON ' + totalParams + ' PARÁMETROS (algunos vacíos)</div>';
+        } else {
+            statusHtml = '<div class="status success">✅ SE RECIBIERON ' + totalParams + ' PARÁMETROS CORRECTAMENTE</div>';
+        }
+        document.getElementById('statusContainer').innerHTML = statusHtml;
+
+        // Display parameters
+        let paramsHtml = '';
+        if (totalParams === 0) {
+            paramsHtml = '<p style="text-align: center; color: #ef4444;">No hay parámetros en la URL</p>';
+        } else {
+            expectedParams.forEach(param => {
+                const value = allParams[param] || '';
+                const valueClass = value ? '' : 'empty';
+                const displayValue = value || '(vacío)';
+
+                paramsHtml += `
+                    <div class="param-row">
+                        <span class="param-name">${param}:</span>
+                        <span class="param-value ${valueClass}">${displayValue}</span>
+                    </div>
+                `;
+            });
+
+            // Show any extra parameters not in the expected list
+            Object.keys(allParams).forEach(key => {
+                if (!expectedParams.includes(key)) {
+                    paramsHtml += `
+                        <div class="param-row">
+                            <span class="param-name">${key} (extra):</span>
+                            <span class="param-value">${allParams[key]}</span>
+                        </div>
+                    `;
+                }
+            });
+        }
+        document.getElementById('paramsContainer').innerHTML = paramsHtml;
+
+        // Display summary
+        let summaryHtml = '<div style="padding: 10px;">';
+        summaryHtml += `<p>📊 <strong>Total de parámetros:</strong> ${totalParams}</p>`;
+        summaryHtml += `<p>📋 <strong>Parámetros esperados:</strong> ${expectedParams.length}</p>`;
+        summaryHtml += `<p>✅ <strong>Parámetros con valor:</strong> ${expectedParams.filter(p => allParams[p] && allParams[p] !== '').length}</p>`;
+        summaryHtml += `<p>❌ <strong>Parámetros vacíos:</strong> ${emptyParams.length}</p>`;
+
+        if (emptyParams.length > 0) {
+            summaryHtml += '<p style="margin-top: 15px; color: #f59e0b;"><strong>Parámetros vacíos:</strong></p>';
+            summaryHtml += '<ul style="margin-left: 20px; margin-top: 5px;">';
+            emptyParams.forEach(p => {
+                summaryHtml += `<li style="color: #ef4444;">${p}</li>`;
+            });
+            summaryHtml += '</ul>';
+        }
+
+        summaryHtml += '</div>';
+        document.getElementById('summaryContainer').innerHTML = summaryHtml;
+
+        // Log to console for debugging
+        console.log('📍 URL Parameters:', allParams);
+        console.log('📊 Total parameters:', totalParams);
+        console.log('❌ Empty parameters:', emptyParams);
+    </script>
+</body>
+</html>
