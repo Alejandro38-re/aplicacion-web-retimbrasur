@@ -854,22 +854,46 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('AppSheet info displayed on home screen');
         }
 
-        // Auto-select work center if provided
+        // Auto-create and select work center if provided
         if (appSheetData.workCenter) {
-            console.log('Auto-selecting work center:', appSheetData.workCenter);
-            const centerSelect = document.getElementById('centerSelect');
-            if (centerSelect) {
-                // Try to find and select the center
-                const options = Array.from(centerSelect.options);
-                const matchingOption = options.find(opt =>
-                    opt.text.toLowerCase().includes(appSheetData.workCenter.toLowerCase())
-                );
-                if (matchingOption) {
-                    centerSelect.value = matchingOption.value;
-                    centerSelect.dispatchEvent(new Event('change'));
-                    console.log('Work center auto-selected');
-                }
+            console.log('Auto-creating/selecting work center:', appSheetData.workCenter);
+
+            // Check if center already exists
+            let existingCenter = workCenters.find(c =>
+                c.name.toLowerCase() === appSheetData.workCenter.toLowerCase()
+            );
+
+            // If center doesn't exist, create it
+            if (!existingCenter) {
+                console.log('Work center does not exist, creating new one...');
+                const newCenter = {
+                    id: Date.now().toString(),
+                    name: appSheetData.workCenter,
+                    address: appSheetData.workCenterAddress || '',
+                    client: appSheetData.clientName || '',
+                    phone: appSheetData.clientPhone || appSheetData.contactPhone || '',
+                    contact: appSheetData.contactName || '',
+                    email: appSheetData.contactEmail || '',
+                    createdAt: new Date().toISOString(),
+                    fromAppSheet: true
+                };
+
+                existingCenter = saveWorkCenter(newCenter);
+                console.log('Work center created:', existingCenter);
+
+                // Refresh work centers list and reload select
+                loadWorkCenters();
             }
+
+            // Auto-select the center
+            setTimeout(() => {
+                const centerSelect = document.getElementById('centerSelect');
+                if (centerSelect && existingCenter) {
+                    centerSelect.value = existingCenter.id;
+                    centerSelect.dispatchEvent(new Event('change'));
+                    console.log('Work center auto-selected:', existingCenter.name);
+                }
+            }, 100);
         }
     }
 });
