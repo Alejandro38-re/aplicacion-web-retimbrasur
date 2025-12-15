@@ -318,7 +318,7 @@ function sendDataToAppSheet(inspection) {
         email: appSheetData.contactEmail,
         importe: appSheetData.maintenanceAmount,
         pagoEfectivo: appSheetData.cashPayment,
-        progreso: 'COMPLETADO', // Update progress to COMPLETADO
+        // Note: progreso field is NOT sent back to AppSheet (managed by AppSheet only)
 
         // Results summary
         totalItems: inspection.checklist.length,
