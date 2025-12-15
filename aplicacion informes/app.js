@@ -1,13 +1,13 @@
 // ===== RETIMBRASUR - Sistema de Inspección PCI =====
-const APP_VERSION = 'v2.1.0';
+const APP_VERSION = 'v2.2.0';
 console.log(`%c🔥 RETIMBRASUR ${APP_VERSION}`, 'color: #ff6b35; font-size: 16px; font-weight: bold;');
 console.log('%c✅ Cambios en esta versión:', 'color: #10b981; font-weight: bold;');
-console.log('   • ✨ MEJORAS VISUALES para tablets y móviles:');
-console.log('   • 📱 Botones más grandes (56px altura mínima) para tablets');
-console.log('   • ☑️ Checkboxes más grandes (32px) con estados visuales de color');
-console.log('   • 🖼️ Galería de fotos mejorada con grid responsive (180px en tablets)');
-console.log('   • 📝 Campos de formulario más grandes para mejor usabilidad táctil');
-console.log('   • 🎨 Indicadores visuales: verde (Conforme), amarillo (Advertencia), rojo (No Conforme)');
+console.log('   • 📅 SINCRONIZACIÓN CON APPSHEET:');
+console.log('   • ↔️ Sincronización bidireccional de fechas de mantenimiento');
+console.log('   • 📍 Campos sincronizados: CENTRO, FECHA, PRÓXIMO MANTENIMIENTO');
+console.log('   • 🔔 Alertas de caducidad de mantenimiento (Vigente/Próximo/Vencido)');
+console.log('   • 📊 Cálculo automático basado en tipo (TRIMESTRAL, SEMESTRAL, ANUAL)');
+console.log('   • ⚠️ Badges visuales: verde (>30 días), amarillo (≤30 días), rojo (vencido)');
 
 // ===== AppSheet Integration =====
 // Parse URL parameters from AppSheet
@@ -32,6 +32,13 @@ function getURLParameters() {
         technicianName: params.get('technicianName') || '',
         technicianId: params.get('technicianId') || '',
 
+        // Maintenance Schedule Info (from AppSheet MANTENIMIENTO table)
+        workCenter: params.get('workCenter') || params.get('centro') || '', // CENTRO field
+        lastMaintenanceDate: params.get('lastMaintenanceDate') || params.get('fecha') || '', // FECHA field
+        nextMaintenanceDate: params.get('nextMaintenanceDate') || params.get('proximoMantenimiento') || '', // PRÓXIMO MANTENIMIENTO field
+        maintenanceType: params.get('maintenanceType') || params.get('mant') || '', // MANT field (TRIMESTRAL, SEMESTRAL, ANUAL)
+        maintenanceRowNumber: params.get('maintenanceRowNumber') || params.get('rowNumber') || '', // _RowNumber for update
+
         // AppSheet callback URL
         returnUrl: params.get('returnUrl') || '',
         appsheetMode: params.get('appsheetMode') === 'true'
@@ -41,12 +48,87 @@ function getURLParameters() {
 // Global variable to store AppSheet data
 const appSheetData = getURLParameters();
 
+// ===== Maintenance Schedule Functions =====
+// Calculate next maintenance date based on maintenance type and current inspection date
+function calculateNextMaintenance(inspectionDate, maintenanceType) {
+    if (!inspectionDate) return '';
+
+    const date = new Date(inspectionDate);
+    if (isNaN(date.getTime())) return '';
+
+    const type = (maintenanceType || '').toUpperCase();
+
+    switch(type) {
+        case 'TRIMESTRAL':
+        case 'TRIM':
+            date.setMonth(date.getMonth() + 3);
+            break;
+        case 'SEMESTRAL':
+        case 'SEM':
+            date.setMonth(date.getMonth() + 6);
+            break;
+        case 'ANUAL':
+        case 'ANUAL 5 AÑOS':
+            date.setFullYear(date.getFullYear() + 1);
+            break;
+        default:
+            // Default to 6 months if type not specified
+            date.setMonth(date.getMonth() + 6);
+    }
+
+    // Return in YYYY-MM-DD format
+    return date.toISOString().split('T')[0];
+}
+
+// Get maintenance status based on next maintenance date
+function getMaintenanceStatus(nextMaintenanceDate) {
+    if (!nextMaintenanceDate) return 'unknown';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const nextDate = new Date(nextMaintenanceDate);
+    nextDate.setHours(0, 0, 0, 0);
+
+    // Calculate days difference
+    const diffTime = nextDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+        return 'overdue'; // Vencido
+    } else if (diffDays <= 30) {
+        return 'warning'; // Próximo a vencer (dentro de 30 días)
+    } else {
+        return 'ok'; // Vigente
+    }
+}
+
+// Get days until next maintenance
+function getDaysUntilMaintenance(nextMaintenanceDate) {
+    if (!nextMaintenanceDate) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const nextDate = new Date(nextMaintenanceDate);
+    nextDate.setHours(0, 0, 0, 0);
+
+    const diffTime = nextDate - today;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
 // Function to send data back to AppSheet
 function sendDataToAppSheet(inspection) {
     if (!appSheetData.returnUrl) {
         console.log('No return URL specified, data will only be stored locally');
         return;
     }
+
+    // Use next maintenance date from inspection if available (AppSheet calculated), otherwise calculate it
+    const nextMaintenance = inspection.nextMaintenanceDate || calculateNextMaintenance(
+        inspection.inspectionDate,
+        inspection.maintenanceType || appSheetData.maintenanceType
+    );
 
     // Prepare data for AppSheet
     const appSheetPayload = {
@@ -59,6 +141,13 @@ function sendDataToAppSheet(inspection) {
         inspectionDate: inspection.inspectionDate,
         technician: inspection.technician,
         status: inspection.status,
+
+        // Maintenance Schedule Data (sync back to AppSheet)
+        rowNumber: appSheetData.maintenanceRowNumber, // For updating the correct row
+        centro: inspection.workCenterName || appSheetData.workCenter,
+        fecha: inspection.inspectionDate, // Update FECHA with current inspection date
+        proximoMantenimiento: nextMaintenance, // Send back (AppSheet will recalculate if needed)
+        mant: inspection.maintenanceType || appSheetData.maintenanceType,
 
         // Results summary
         totalItems: inspection.checklist.length,
@@ -841,7 +930,17 @@ function saveInspection(status) {
         clientName: appSheetData.clientName || currentWorkCenter?.clientName,
         clientAddress: appSheetData.clientAddress,
         clientPhone: appSheetData.clientPhone || currentWorkCenter?.phone,
-        technicianId: appSheetData.technicianId
+        technicianId: appSheetData.technicianId,
+
+        // Maintenance Schedule Data
+        maintenanceType: appSheetData.maintenanceType || 'SEMESTRAL',
+        lastMaintenanceDate: appSheetData.lastMaintenanceDate || document.getElementById('inspectionDate').value,
+        // Use nextMaintenanceDate from AppSheet if available, otherwise calculate it
+        nextMaintenanceDate: appSheetData.nextMaintenanceDate || calculateNextMaintenance(
+            document.getElementById('inspectionDate').value,
+            appSheetData.maintenanceType || 'SEMESTRAL'
+        ),
+        maintenanceRowNumber: appSheetData.maintenanceRowNumber
     };
 
     // Add pressure group specific fields if applicable
@@ -2475,6 +2574,40 @@ function displayEquipmentList(equipment, centerId) {
             .filter(i => i.equipmentId === eq.id && i.workCenterId === centerId)
             .sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0];
 
+        // Get maintenance status
+        let maintenanceBadge = '';
+        if (lastInspection && lastInspection.nextMaintenanceDate) {
+            const status = getMaintenanceStatus(lastInspection.nextMaintenanceDate);
+            const daysUntil = getDaysUntilMaintenance(lastInspection.nextMaintenanceDate);
+            const nextDate = formatDate(lastInspection.nextMaintenanceDate);
+
+            if (status === 'overdue') {
+                maintenanceBadge = `
+                    <div class="inspection-badge-overdue" style="margin-top: 8px;">
+                        ⚠️ Mantenimiento vencido
+                        <div style="font-size: 0.75rem; margin-top: 2px;">
+                            Vencido hace ${Math.abs(daysUntil)} días
+                        </div>
+                    </div>
+                `;
+            } else if (status === 'warning') {
+                maintenanceBadge = `
+                    <div class="inspection-badge-warning" style="margin-top: 8px;">
+                        ⏰ Próximo mantenimiento
+                        <div style="font-size: 0.75rem; margin-top: 2px;">
+                            ${nextDate} (${daysUntil} días)
+                        </div>
+                    </div>
+                `;
+            } else {
+                maintenanceBadge = `
+                    <div class="inspection-badge-ok" style="margin-top: 8px;">
+                        ✓ Próximo: ${nextDate}
+                    </div>
+                `;
+            }
+        }
+
         return `
             <div class="equipment-card saved-equipment" data-equipment-id="${eq.id}" data-type="${eq.type}">
                 <div class="card-icon">${typeInfo ? typeInfo.icon : '🔧'}</div>
@@ -2485,10 +2618,11 @@ function displayEquipmentList(equipment, centerId) {
                     ${lastInspection ? `
                         <p class="last-inspection">
                             <strong>Última inspección:</strong><br>
-                            ${formatDate(lastInspection.inspectionDate)} - 
+                            ${formatDate(lastInspection.inspectionDate)} -
                             <span class="status-${lastInspection.status}">${lastInspection.status === 'completed' ? '✓ Completada' : '📝 Borrador'}</span>
                         </p>
                     ` : '<p class="last-inspection">Sin inspecciones previas</p>'}
+                    ${maintenanceBadge}
                 </div>
                 <button class="btn btn-primary btn-sm inspect-equipment-btn">
                     Inspeccionar
@@ -3168,6 +3302,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Get maintenance status badge
+            let maintenanceBadge = '';
+            if (lastInspection && lastInspection.nextMaintenanceDate) {
+                const status = getMaintenanceStatus(lastInspection.nextMaintenanceDate);
+                const daysUntil = getDaysUntilMaintenance(lastInspection.nextMaintenanceDate);
+                const nextDate = formatDate(lastInspection.nextMaintenanceDate);
+
+                if (status === 'overdue') {
+                    maintenanceBadge = `
+                        <div class="inspection-badge-overdue" style="margin-top: 8px;">
+                            ⚠️ Mantenimiento vencido
+                            <div style="font-size: 0.75rem; margin-top: 2px;">
+                                Vencido hace ${Math.abs(daysUntil)} días
+                            </div>
+                        </div>
+                    `;
+                } else if (status === 'warning') {
+                    maintenanceBadge = `
+                        <div class="inspection-badge-warning" style="margin-top: 8px;">
+                            ⏰ Próximo mantenimiento
+                            <div style="font-size: 0.75rem; margin-top: 2px;">
+                                ${nextDate} (${daysUntil} días)
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    maintenanceBadge = `
+                        <div class="inspection-badge-ok" style="margin-top: 8px;">
+                            ✓ Próximo: ${nextDate}
+                        </div>
+                    `;
+                }
+            }
+
             return `
                 <div class="equipment-card saved-equipment" data-equipment-id="${eq.id}" data-type="${eq.type}">
                     <button class="btn-delete-equipment" data-equipment-id="${eq.id}">✕</button>
@@ -3194,6 +3362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="last-inspection">
                                 <p><strong>Última inspección:</strong> ${new Date(lastInspection.inspectionDate).toLocaleDateString()}</p>
                                 ${reminderBadge ? `<p style="margin-top: 8px;">${reminderBadge}</p>` : ''}
+                                ${maintenanceBadge}
                             </div>
                         ` : `<p style="margin-top: 10px;">${getInspectionStatusBadge('unknown', null)}</p>`}
                     </div>

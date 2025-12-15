@@ -1,4 +1,4 @@
-const CACHE_NAME = 'retimbrasur-v2.1.0';
+const CACHE_NAME = 'retimbrasur-v2.2.0';
 const CACHE_ASSETS = [
   './index.html',
   './app.js',
