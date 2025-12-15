@@ -848,15 +848,33 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Checking AppSheet parameters...', appSheetData);
     if (appSheetData.appsheetMode) {
         console.log('AppSheet mode detected, displaying info on home screen');
+
+        // Show AppSheet mode indicator
+        const appsheetModeIndicator = document.getElementById('appsheetModeIndicator');
+        if (appsheetModeIndicator) {
+            appsheetModeIndicator.style.display = 'block';
+        }
+
+        // Display contact and payment info
         const appsheetInfoHome = document.getElementById('appsheetInfoHome');
         if (appsheetInfoHome) {
             appsheetInfoHome.innerHTML = displayContactAndPaymentInfo();
             console.log('AppSheet info displayed on home screen');
         }
 
+        // Update subtitle
+        const subtitle = document.getElementById('workCenterSubtitle');
+        if (subtitle) {
+            subtitle.textContent = 'Centro sugerido desde AppSheet (puedes cambiarlo si lo necesitas)';
+        }
+
         // Auto-create and select work center if provided
         if (appSheetData.workCenter) {
-            console.log('Auto-creating/selecting work center:', appSheetData.workCenter);
+            console.log('🏢 Auto-creating/selecting work center:', appSheetData.workCenter);
+            console.log('📊 Current work centers:', workCenters);
+
+            // Reload work centers from localStorage to ensure we have latest data
+            workCenters = loadWorkCenters();
 
             // Check if center already exists
             let existingCenter = workCenters.find(c =>
@@ -865,7 +883,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // If center doesn't exist, create it
             if (!existingCenter) {
-                console.log('Work center does not exist, creating new one...');
+                console.log('✨ Work center does not exist, creating new one...');
                 const newCenter = {
                     id: Date.now().toString(),
                     name: appSheetData.workCenter,
@@ -879,23 +897,71 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 existingCenter = saveWorkCenter(newCenter);
-                console.log('Work center created:', existingCenter);
+                console.log('✅ Work center created successfully:', existingCenter);
 
-                // Refresh work centers list and reload select
-                loadWorkCenters();
+                // Add visual notification
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 80px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+                    z-index: 10000;
+                    font-weight: 600;
+                    animation: slideIn 0.3s ease-out;
+                `;
+                notification.innerHTML = `✅ Centro creado: ${existingCenter.name}`;
+                document.body.appendChild(notification);
+                setTimeout(() => notification.remove(), 3000);
+
+                // Refresh work centers list
+                workCenters = loadWorkCenters();
+            } else {
+                console.log('ℹ️ Work center already exists:', existingCenter.name);
             }
 
-            // Auto-select the center
+            // Populate the select dropdown with updated centers
             setTimeout(() => {
+                populateCenterDropdown();
+
+                // Auto-select the center
                 const centerSelect = document.getElementById('centerSelect');
                 if (centerSelect && existingCenter) {
                     centerSelect.value = existingCenter.id;
                     centerSelect.dispatchEvent(new Event('change'));
-                    console.log('Work center auto-selected:', existingCenter.name);
+                    console.log('🎯 Work center auto-selected:', existingCenter.name);
+
+                    // Show hint that center was auto-selected
+                    const centerSelectHint = document.getElementById('centerSelectHint');
+                    if (centerSelectHint) {
+                        centerSelectHint.style.display = 'block';
+                    }
+
+                    // Show change center button in center info card
+                    const changeCenterBtn = document.getElementById('changeCenterBtn');
+                    if (changeCenterBtn) {
+                        changeCenterBtn.style.display = 'inline-flex';
+                    }
                 }
-            }, 100);
+            }, 200);
         }
     }
+
+    // Change Center button functionality
+    document.getElementById('changeCenterBtn')?.addEventListener('click', () => {
+        const centerInfo = document.getElementById('centerInfo');
+        const centerSelect = document.getElementById('centerSelect');
+
+        if (centerInfo) centerInfo.style.display = 'none';
+        if (centerSelect) {
+            centerSelect.value = '';
+            centerSelect.focus();
+        }
+    });
 });
 
 function startInspection(type) {
@@ -2751,9 +2817,9 @@ function displayCenterInfo(centerId) {
 
     document.getElementById('centerInfoName').textContent = center.name;
     document.getElementById('centerInfoAddress').textContent = center.address || '-';
-    document.getElementById('centerInfoClient').textContent = center.clientName || '-';
+    document.getElementById('centerInfoClient').textContent = center.client || center.clientName || '-';
     document.getElementById('centerInfoPhone').textContent = center.phone || '-';
-    document.getElementById('centerInfoEquipment').textContent = center.equipment ? center.equipment.length : 0;
+    document.getElementById('centerInfoContact').textContent = center.contact || '-';
 
     document.getElementById('centerInfo').style.display = 'block';
 }
