@@ -12,6 +12,16 @@
 
 ---
 
+### 🌐 [APPSHEET_EXTERNAL_LINK.md](./APPSHEET_EXTERNAL_LINK.md)
+**Configuración específica para "Abrir Web Externa"**
+- Tipo de acción "Link to URL"
+- Abre navegador externo (Chrome/Safari)
+- Paso a paso con verificaciones
+
+👉 **USA ESTA si quieres abrir el navegador externo**
+
+---
+
 ### ❌ [APPSHEET_FIX_PLACEHOLDERS.md](./APPSHEET_FIX_PLACEHOLDERS.md)
 **Solución para el problema de placeholders**
 - Si ves `[_THISROW].[CENTRO]` en lugar de valores reales
@@ -36,8 +46,13 @@
 
 ## 🚀 Flujo Recomendado
 
-### Primera Configuración:
-1. Lee **APPSHEET_QUICK_START.md** (5 min)
+### Primera Configuración (Abrir Web Externa):
+1. Lee **APPSHEET_EXTERNAL_LINK.md** (configuración específica para navegador)
+2. Crea columna virtual + acción tipo "Link to URL"
+3. Prueba que abre en Chrome/Safari
+
+**O usa:**
+1. Lee **APPSHEET_QUICK_START.md** (5 min - más general)
 2. Sigue los 4 pasos
 3. Prueba el botón
 
