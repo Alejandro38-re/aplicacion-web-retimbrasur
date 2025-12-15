@@ -1,5 +1,15 @@
 # 🔗 Guía de Configuración AppSheet - RETIMBRASUR
 
+## ⚠️ ¿VES PLACEHOLDERS COMO `[_THISROW].[CENTRO]`?
+
+**Si al abrir la app desde AppSheet ves textos como `[_THISROW].[Campo]` en lugar de los valores reales:**
+
+👉 **[CONSULTA APPSHEET_FIX_PLACEHOLDERS.md](./APPSHEET_FIX_PLACEHOLDERS.md)** 👈
+
+Ese archivo tiene todas las soluciones paso a paso para este problema común.
+
+---
+
 ## 📋 Resumen
 
 Esta guía te ayudará a configurar el botón "Comenzar Mantenimiento" en AppSheet para que abra la aplicación web de inspección con todos los datos pre-cargados.
@@ -61,32 +71,99 @@ https://retimbrasur.com/index.html
 
 ## 🔧 Paso 2: Configurar el Botón en AppSheet
 
-### 2.1. Ir a la Tabla MANTENIMIENTO
+### 2.1. Crear Columna Virtual para la URL ⭐ IMPORTANTE
+
+**¿Por qué?** AppSheet no reemplaza `[_THISROW]` directamente en URLs. Necesitas crear una columna que genere la URL dinámicamente.
 
 1. Abre tu app en AppSheet Editor
-2. Ve a **Data** → **MANTENIMIENTO**
-3. Ve a **UX** → **Views**
-4. Busca la vista donde quieres agregar el botón (ej: "Detail View")
+2. Ve a **Data** → **Columns**
+3. Haz clic en **"+ New Column"** (o "+ Column" arriba a la derecha)
+4. Configura la nueva columna así:
 
-### 2.2. Crear una Acción Tipo "App: go to another view within this app"
-
-**Nombre de la Acción:** `Comenzar Mantenimiento`
-
-**Action Type:** Selecciona `Link to URL` o `App: go to another view within this app`
-
-**URL (Usando GitHub Pages - Para probar AHORA):**
-
+**Configuración de la Columna:**
 ```
-https://alejandro38-re.github.io/aplicacion-web-retimbrasur/aplicacion%20informes/index.html?clientId=[_THISROW].[ID_Cliente]&clientName=[_THISROW].[Nombre_Cliente]&workCenterId=[_THISROW].[ID_Centro]&workCenterName=[_THISROW].[Nombre_Centro]&centro=[_THISROW].[CENTRO]&fecha=[_THISROW].[FECHA]&proximoMantenimiento=[_THISROW].[PRÓXIMO MANTENIMIENTO]&mant=[_THISROW].[MANT]&contacto=[_THISROW].[CONTACTO]&telefono=[_THISROW].[TELEFONO]&email=[_THISROW].[EMAIL]&importe=[_THISROW].[IMPORTE]&pagoEfectivo=[_THISROW].[PAGO EFECTIVO]&observaciones=[_THISROW].[OBSERVACIONES]&progreso=[_THISROW].[PROGRESO]&rowNumber=[_THISROW].[_RowNumber]&technicianName=[_THISROW].[Nombre_Tecnico]&appsheetMode=true&returnUrl=https://www.appsheet.com/redirect
+Column Name: URL_MantenimientoApp
+Type: URL
+App Formula: YES (marca el checkbox)
+Formula: (pega la expresión CONCATENATE de abajo)
+Show?: NO (desmarca - no necesitas verla en la app)
+Editable?: NO (desmarca)
 ```
 
-**URL (Usando Hostinger - Para producción más tarde):**
+**EXPRESIÓN PARA EL CAMPO FORMULA (GitHub Pages - para probar AHORA):**
 
 ```
-https://retimbrasur.com/index.html?clientId=[_THISROW].[ID_Cliente]&clientName=[_THISROW].[Nombre_Cliente]&workCenterId=[_THISROW].[ID_Centro]&workCenterName=[_THISROW].[Nombre_Centro]&centro=[_THISROW].[CENTRO]&fecha=[_THISROW].[FECHA]&proximoMantenimiento=[_THISROW].[PRÓXIMO MANTENIMIENTO]&mant=[_THISROW].[MANT]&contacto=[_THISROW].[CONTACTO]&telefono=[_THISROW].[TELEFONO]&email=[_THISROW].[EMAIL]&importe=[_THISROW].[IMPORTE]&pagoEfectivo=[_THISROW].[PAGO EFECTIVO]&observaciones=[_THISROW].[OBSERVACIONES]&progreso=[_THISROW].[PROGRESO]&rowNumber=[_THISROW].[_RowNumber]&technicianName=[_THISROW].[Nombre_Tecnico]&appsheetMode=true&returnUrl=https://www.appsheet.com/redirect
+CONCATENATE(
+  "https://alejandro38-re.github.io/aplicacion-web-retimbrasur/aplicacion%20informes/index.html",
+  "?centro=", ENCODEURL([CENTRO]),
+  "&contacto=", ENCODEURL(TEXT([CONTACTO])),
+  "&telefono=", IF(ISBLANK([TELEFONO]), "", [TELEFONO]),
+  "&email=", IF(ISBLANK([EMAIL]), "", ENCODEURL([EMAIL])),
+  "&mant=", [MANT],
+  "&importe=", IF(ISBLANK([IMPORTE]), "", TEXT([IMPORTE])),
+  "&fecha=", TEXT([FECHA]),
+  "&proximoMantenimiento=", TEXT([PRÓXIMO MANTENIMIENTO]),
+  "&pagoEfectivo=", [PAGO EFECTIVO],
+  "&observaciones=", IF(ISBLANK([OBSERVACIONES]), "", ENCODEURL([OBSERVACIONES])),
+  "&progreso=", IF(ISBLANK([PROGRESO]), "", ENCODEURL(TEXT([PROGRESO]))),
+  "&rowNumber=", TEXT([_RowNumber]),
+  "&appsheetMode=true"
+)
 ```
 
-### 2.3. Configuración Adicional del Botón
+**EXPRESIÓN PARA HOSTINGER (cuando estés listo para producción):**
+
+```
+CONCATENATE(
+  "https://retimbrasur.com/index.html",
+  "?centro=", ENCODEURL([CENTRO]),
+  "&contacto=", ENCODEURL(TEXT([CONTACTO])),
+  "&telefono=", IF(ISBLANK([TELEFONO]), "", [TELEFONO]),
+  "&email=", IF(ISBLANK([EMAIL]), "", ENCODEURL([EMAIL])),
+  "&mant=", [MANT],
+  "&importe=", IF(ISBLANK([IMPORTE]), "", TEXT([IMPORTE])),
+  "&fecha=", TEXT([FECHA]),
+  "&proximoMantenimiento=", TEXT([PRÓXIMO MANTENIMIENTO]),
+  "&pagoEfectivo=", [PAGO EFECTIVO],
+  "&observaciones=", IF(ISBLANK([OBSERVACIONES]), "", ENCODEURL([OBSERVACIONES])),
+  "&progreso=", IF(ISBLANK([PROGRESO]), "", ENCODEURL(TEXT([PROGRESO]))),
+  "&rowNumber=", TEXT([_RowNumber]),
+  "&appsheetMode=true"
+)
+```
+
+5. Haz clic en **"Done"** para guardar la columna
+6. Haz clic en **"Save"** arriba a la derecha para guardar la app
+
+**⚠️ NOTAS IMPORTANTES:**
+- Si CONTACTO es una referencia (Ref), usa `TEXT([CONTACTO])` para obtener el ID o `[CONTACTO].[Label]` para el nombre
+- Los campos con `IF(ISBLANK())` evitan errores si el campo está vacío
+- `ENCODEURL()` codifica espacios y caracteres especiales correctamente
+- `TEXT()` convierte números y fechas a texto para la URL
+
+### 2.2. Crear la Acción que Usa la Columna Virtual
+
+1. Ve a **Behavior** → **Actions**
+2. Haz clic en **"+ New Action"**
+3. Configura así:
+
+**Configuración de la Acción:**
+```
+Action name: Comenzar Mantenimiento
+For a record of table: MANTENIMIENTO
+Do this: Link to URL
+Link: [URL_MantenimientoApp]
+```
+
+**⚠️ IMPORTANTE:** En el campo "Link", **NO PEGUES TEXTO**. En su lugar:
+- Haz clic en el campo "Link"
+- Aparecerá un dropdown con las columnas disponibles
+- **Selecciona: URL_MantenimientoApp** de la lista
+- Debería quedar: `[URL_MantenimientoApp]` (solo el nombre de la columna entre corchetes)
+
+4. Haz clic en **"Done"**
+
+### 2.3. Configuración Adicional de la Acción
 
 **Prominence:** `Primary` (para que sea visible y destacado)
 
@@ -100,6 +177,26 @@ https://retimbrasur.com/index.html?clientId=[_THISROW].[ID_Cliente]&clientName=[
 - ✅ Show if: `TRUE` (o una condición si solo quieres mostrarlo en ciertos casos)
 - ✅ Needs confirmation: `No`
 - ✅ Open in new window: `Yes` (recomendado)
+
+5. Haz clic en **"Done"**
+6. Haz clic en **"Save"** para guardar
+
+### 2.4. Agregar el Botón a la Vista
+
+1. Ve a **UX** → **Views**
+2. Busca la vista donde quieres el botón (ejemplo: **"MANTENIMIENTO_Detail"** o la vista de detalle)
+3. Haz clic en la vista para editarla
+4. En **View Options**, busca **"Row selected action"** o **"Actions"**
+5. Agrega o selecciona la acción **"Comenzar Mantenimiento"**
+6. **Guarda** la vista
+
+**Alternativa - Agregar como botón flotante:**
+1. En la misma vista, busca **"Display"** → **"Quick edit"** o **"Overlay actions"**
+2. Marca **"Comenzar Mantenimiento"** para que aparezca como botón
+3. **Guarda**
+
+7. Haz **"Save & Verify"** arriba a la derecha
+8. Haz **"Deploy"** o **"Go Live"** para publicar los cambios
 
 ---
 
