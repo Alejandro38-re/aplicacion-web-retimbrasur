@@ -64,7 +64,13 @@
             <div class="welcome-container">
                 <div class="welcome-header">
                     <h2>Selecciona Centro de Trabajo</h2>
-                    <p>Elige un centro existente o crea uno nuevo</p>
+                    <p id="workCenterSubtitle">Elige un centro existente o crea uno nuevo</p>
+                </div>
+
+                <!-- AppSheet Mode Indicator -->
+                <div id="appsheetModeIndicator" style="display: none; max-width: 600px; margin: 0 auto 20px; padding: 12px 20px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.2)); border: 2px solid rgba(59, 130, 246, 0.5); border-radius: 12px; text-align: center;">
+                    <span style="color: #60a5fa; font-weight: 600;">📱 Viniendo desde AppSheet</span>
+                    <span style="color: var(--text-secondary); font-size: 0.9rem; margin-left: 10px;">· Puedes cambiar el centro si lo necesitas</span>
                 </div>
 
                 <!-- AppSheet Info Display (if coming from AppSheet) -->
@@ -72,22 +78,32 @@
 
                 <!-- Center Selection -->
                 <div class="center-selection">
-                    <div class="form-group" style="max-width: 500px; margin: 0 auto 30px;">
-                        <label for="centerSelect">Centro de Trabajo</label>
-                        <select id="centerSelect" class="center-select">
+                    <div class="form-group" style="max-width: 600px; margin: 0 auto 30px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <label for="centerSelect">Centro de Trabajo</label>
+                            <button id="newCenterBtn" class="btn btn-ghost btn-sm">
+                                <span class="icon">➕</span>
+                                Nuevo Centro
+                            </button>
+                        </div>
+                        <select id="centerSelect" class="center-select" style="font-size: 1rem;">
                             <option value="">-- Selecciona un centro --</option>
                         </select>
+                        <div id="centerSelectHint" style="display: none; margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">
+                            💡 El centro sugerido desde AppSheet ya está seleccionado
+                        </div>
                     </div>
-
-                    <button id="newCenterBtn" class="btn btn-secondary" style="margin-bottom: 30px;">
-                        <span class="icon">➕</span>
-                        Nuevo Centro
-                    </button>
 
                     <!-- Center Info Display -->
                     <div id="centerInfo" class="center-info" style="display: none;">
                         <div class="info-card">
-                            <h3 id="centerInfoName">Nombre del Centro</h3>
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                                <h3 id="centerInfoName" style="margin: 0;">Nombre del Centro</h3>
+                                <button id="changeCenterBtn" class="btn btn-ghost btn-sm" style="display: none;">
+                                    <span class="icon">🔄</span>
+                                    Cambiar
+                                </button>
+                            </div>
                             <div class="info-grid">
                                 <div class="info-item">
                                     <span class="info-label">📍 Dirección:</span>
@@ -102,13 +118,15 @@
                                     <span id="centerInfoPhone">-</span>
                                 </div>
                                 <div class="info-item">
-                                    <span class="info-label">🔧 Equipos:</span>
-                                    <span id="centerInfoEquipment">0</span>
+                                    <span class="info-label">👤 Contacto:</span>
+                                    <span id="centerInfoContact">-</span>
                                 </div>
                             </div>
-                            <button id="continueToCenterBtn" class="btn btn-primary" style="margin-top: 20px;">
-                                Continuar →
-                            </button>
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button id="continueToCenterBtn" class="btn btn-primary" style="flex: 1;">
+                                    Continuar con este Centro →
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

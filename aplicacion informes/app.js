@@ -848,10 +848,24 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Checking AppSheet parameters...', appSheetData);
     if (appSheetData.appsheetMode) {
         console.log('AppSheet mode detected, displaying info on home screen');
+
+        // Show AppSheet mode indicator
+        const appsheetModeIndicator = document.getElementById('appsheetModeIndicator');
+        if (appsheetModeIndicator) {
+            appsheetModeIndicator.style.display = 'block';
+        }
+
+        // Display contact and payment info
         const appsheetInfoHome = document.getElementById('appsheetInfoHome');
         if (appsheetInfoHome) {
             appsheetInfoHome.innerHTML = displayContactAndPaymentInfo();
             console.log('AppSheet info displayed on home screen');
+        }
+
+        // Update subtitle
+        const subtitle = document.getElementById('workCenterSubtitle');
+        if (subtitle) {
+            subtitle.textContent = 'Centro sugerido desde AppSheet (puedes cambiarlo si lo necesitas)';
         }
 
         // Auto-create and select work center if provided
@@ -920,10 +934,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     centerSelect.value = existingCenter.id;
                     centerSelect.dispatchEvent(new Event('change'));
                     console.log('🎯 Work center auto-selected:', existingCenter.name);
+
+                    // Show hint that center was auto-selected
+                    const centerSelectHint = document.getElementById('centerSelectHint');
+                    if (centerSelectHint) {
+                        centerSelectHint.style.display = 'block';
+                    }
+
+                    // Show change center button in center info card
+                    const changeCenterBtn = document.getElementById('changeCenterBtn');
+                    if (changeCenterBtn) {
+                        changeCenterBtn.style.display = 'inline-flex';
+                    }
                 }
             }, 200);
         }
     }
+
+    // Change Center button functionality
+    document.getElementById('changeCenterBtn')?.addEventListener('click', () => {
+        const centerInfo = document.getElementById('centerInfo');
+        const centerSelect = document.getElementById('centerSelect');
+
+        if (centerInfo) centerInfo.style.display = 'none';
+        if (centerSelect) {
+            centerSelect.value = '';
+            centerSelect.focus();
+        }
+    });
 });
 
 function startInspection(type) {
@@ -2779,9 +2817,9 @@ function displayCenterInfo(centerId) {
 
     document.getElementById('centerInfoName').textContent = center.name;
     document.getElementById('centerInfoAddress').textContent = center.address || '-';
-    document.getElementById('centerInfoClient').textContent = center.clientName || '-';
+    document.getElementById('centerInfoClient').textContent = center.client || center.clientName || '-';
     document.getElementById('centerInfoPhone').textContent = center.phone || '-';
-    document.getElementById('centerInfoEquipment').textContent = center.equipment ? center.equipment.length : 0;
+    document.getElementById('centerInfoContact').textContent = center.contact || '-';
 
     document.getElementById('centerInfo').style.display = 'block';
 }
