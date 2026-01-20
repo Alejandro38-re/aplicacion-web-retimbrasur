@@ -1503,26 +1503,36 @@ function saveInspection(status) {
             lastInspectionStatus: status
         };
 
-        if (shouldSaveEquipment) {
-            // Si el checkbox está marcado, guardar/crear equipo
+        console.log('🔍 DEBUG - saveInspection():', {
+            currentEquipmentId,
+            'inspection.equipmentId': inspection.equipmentId,
+            'equipmentData.id': equipmentData.id,
+            'currentWorkCenter.id': currentWorkCenter.id,
+            shouldSaveEquipment
+        });
+
+        // Verificar si el equipo ya existe
+        const existingEquipment = getEquipmentById(currentWorkCenter.id, equipmentData.id);
+        console.log('🔍 Existing equipment found:', existingEquipment);
+
+        if (existingEquipment) {
+            // El equipo ya existe - SIEMPRE actualizar las fechas de mantenimiento
+            const updatedEquipment = {
+                ...existingEquipment,
+                lastInspectionDate: equipmentData.lastInspectionDate,
+                nextInspectionDate: equipmentData.nextInspectionDate,
+                maintenanceType: equipmentData.maintenanceType,
+                lastInspectionStatus: equipmentData.lastInspectionStatus,
+                updatedAt: new Date().toISOString()
+            };
+            addEquipmentToCenter(currentWorkCenter.id, updatedEquipment);
+            console.log('✅ Equipment maintenance dates updated:', updatedEquipment);
+        } else if (shouldSaveEquipment) {
+            // El equipo NO existe y el checkbox está marcado - crear nuevo equipo
             addEquipmentToCenter(currentWorkCenter.id, equipmentData);
-            console.log('Equipment saved to center:', equipmentData);
+            console.log('✅ New equipment created and saved:', equipmentData);
         } else {
-            // Si no está marcado, verificar si el equipo ya existe y actualizar solo las fechas
-            const existingEquipment = getEquipmentById(currentWorkCenter.id, equipmentData.id);
-            if (existingEquipment) {
-                // El equipo existe, actualizar solo las fechas de mantenimiento
-                const updatedEquipment = {
-                    ...existingEquipment,
-                    lastInspectionDate: equipmentData.lastInspectionDate,
-                    nextInspectionDate: equipmentData.nextInspectionDate,
-                    maintenanceType: equipmentData.maintenanceType,
-                    lastInspectionStatus: equipmentData.lastInspectionStatus,
-                    updatedAt: new Date().toISOString()
-                };
-                addEquipmentToCenter(currentWorkCenter.id, updatedEquipment);
-                console.log('Equipment maintenance dates updated:', updatedEquipment);
-            }
+            console.warn('⚠️ Equipment not found in center and checkbox not marked. ID:', equipmentData.id);
         }
     }
 
@@ -3223,7 +3233,10 @@ function displayEquipmentList(equipment, centerId) {
 // Start inspection with saved equipment data
 function startInspectionWithEquipment(equipmentId, type) {
     currentEquipmentId = equipmentId;
+    console.log('🔍 startInspectionWithEquipment - currentEquipmentId set to:', currentEquipmentId);
+
     const equipment = getEquipmentById(currentWorkCenter.id, equipmentId);
+    console.log('🔍 Equipment retrieved from center:', equipment);
 
     if (!equipment) {
         showToast('Equipo no encontrado', 'error');
@@ -3246,6 +3259,8 @@ function startInspectionWithEquipment(equipmentId, type) {
     if (equipment.lastRetestDate) {
         document.getElementById('lastRetestDate').value = equipment.lastRetestDate;
     }
+
+    console.log('✅ Equipment data pre-filled in form');
 }
 
 // ===== Initialize =====
@@ -3859,32 +3874,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
         container.innerHTML = equipment.map(eq => {
             const typeInfo = equipmentTypes[eq.type];
-            const lastInspection = inspections
-                .filter(i => i.equipmentId === eq.id && i.workCenterId === centerId)
-                .sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0];
+
+            // Use equipment's own maintenance dates if available (PRIORITY)
+            let lastInspectionDate = eq.lastInspectionDate;
+            let nextInspectionDate = eq.nextInspectionDate;
+            let maintenanceTypeDisplay = eq.maintenanceType;
+            let inspectionStatus = eq.lastInspectionStatus || 'completed';
+
+            // Fallback: search in inspections if equipment doesn't have dates
+            let lastInspection = null;
+            if (!lastInspectionDate || !nextInspectionDate) {
+                lastInspection = inspections
+                    .filter(i => i.equipmentId === eq.id && i.workCenterId === centerId)
+                    .sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0];
+
+                if (lastInspection) {
+                    lastInspectionDate = lastInspection.inspectionDate;
+                    nextInspectionDate = lastInspection.nextMaintenanceDate;
+                    maintenanceTypeDisplay = lastInspection.maintenanceType;
+                    inspectionStatus = lastInspection.status;
+                }
+            } else {
+                // If equipment has dates, still get lastInspection for photos
+                lastInspection = inspections
+                    .filter(i => i.equipmentId === eq.id && i.workCenterId === centerId)
+                    .sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate))[0];
+            }
 
             // Get photos from equipment or last inspection
             const photos = eq.photos || (lastInspection && lastInspection.photos) || (eq.photo ? [eq.photo] : (lastInspection && lastInspection.photo ? [lastInspection.photo] : []));
             const photoUrl = photos.length > 0 ? photos[0] : null;
             const photoCount = photos.length;
 
-            // Calculate inspection reminder status
-            let reminderBadge = '';
-            if (lastInspection && lastInspection.inspectionDate) {
-                const nextInspectionDate = calculateNextInspection(lastInspection.inspectionDate, eq.type);
-                if (nextInspectionDate) {
-                    const status = getInspectionStatus(nextInspectionDate);
-                    const daysUntil = getDaysUntilInspection(nextInspectionDate);
-                    reminderBadge = getInspectionStatusBadge(status, daysUntil);
-                }
+            // Build last inspection badge
+            let lastInspectionBadge = '';
+            if (lastInspectionDate) {
+                lastInspectionBadge = `
+                    <p><strong>Última inspección:</strong> ${formatDate(lastInspectionDate)} -
+                    <span class="status-${inspectionStatus}">${inspectionStatus === 'completed' ? '✓ Completada' : '📝 Borrador'}</span>
+                    ${maintenanceTypeDisplay ? `<br><small>Tipo: ${maintenanceTypeDisplay}</small>` : ''}</p>
+                `;
+            } else {
+                lastInspectionBadge = `<p style="color: var(--text-secondary); font-style: italic;">? Sin datos</p>`;
             }
 
             // Get maintenance status badge
             let maintenanceBadge = '';
-            if (lastInspection && lastInspection.nextMaintenanceDate) {
-                const status = getMaintenanceStatus(lastInspection.nextMaintenanceDate);
-                const daysUntil = getDaysUntilMaintenance(lastInspection.nextMaintenanceDate);
-                const nextDate = formatDate(lastInspection.nextMaintenanceDate);
+            if (nextInspectionDate) {
+                const status = getMaintenanceStatus(nextInspectionDate);
+                const daysUntil = getDaysUntilMaintenance(nextInspectionDate);
+                const nextDate = formatDate(nextInspectionDate);
 
                 if (status === 'overdue') {
                     maintenanceBadge = `
@@ -3907,7 +3946,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     maintenanceBadge = `
                         <div class="inspection-badge-ok" style="margin-top: 8px;">
-                            ✓ Próximo: ${nextDate}
+                            ✓ Al día
+                            <div style="font-size: 0.75rem; margin-top: 2px;">
+                                Próximo: ${nextDate}
+                            </div>
                         </div>
                     `;
                 }
@@ -3935,13 +3977,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p><strong>ID:</strong> ${eq.id}</p>
                         <p><strong>Ubicación:</strong> ${eq.location || 'No especificada'}</p>
                         ${eq.manufacturer ? `<p><strong>Fabricante:</strong> ${eq.manufacturer}</p>` : ''}
-                        ${lastInspection ? `
-                            <div class="last-inspection">
-                                <p><strong>Última inspección:</strong> ${new Date(lastInspection.inspectionDate).toLocaleDateString()}</p>
-                                ${reminderBadge ? `<p style="margin-top: 8px;">${reminderBadge}</p>` : ''}
-                                ${maintenanceBadge}
-                            </div>
-                        ` : `<p style="margin-top: 10px;">${getInspectionStatusBadge('unknown', null)}</p>`}
+                        <div class="last-inspection">
+                            ${lastInspectionBadge}
+                            ${maintenanceBadge}
+                        </div>
                     </div>
                     <button class="btn btn-primary btn-sm inspect-equipment-btn" data-equipment-id="${eq.id}">
                         Inspeccionar
