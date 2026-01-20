@@ -1,9 +1,13 @@
 // ===== RETIMBRASUR - Sistema de Inspección PCI =====
-const APP_VERSION = 'v2.2.3';
+const APP_VERSION = 'v2.3.0';
 console.log(`%c🔥 RETIMBRASUR ${APP_VERSION}`, 'color: #ff6b35; font-size: 16px; font-weight: bold;');
 console.log('%c✅ Cambios en esta versión:', 'color: #10b981; font-weight: bold;');
-console.log('   • 👤 INFORMACIÓN DE CONTACTO Y PAGO:');
-console.log('   • 📞 Card de contacto con botón de llamada directa');
+console.log('   • 💾 AUTO-GUARDADO PROGRESIVO:');
+console.log('   • ⏱️ Guardado automático cada 30 segundos');
+console.log('   • ✓ Guardado al marcar 25%, 50%, 75%, 100% del checklist');
+console.log('   • 📂 Recuperación automática de borradores al iniciar');
+console.log('   • 🔔 Indicador visual de guardado automático');
+console.log('   • 🛡️ Protección contra pérdida de datos');
 console.log('   • 💰 Importe del mantenimiento visible');
 console.log('   • 💵 Badge destacado para PAGO EN EFECTIVO (parpadeante)');
 console.log('   • 📧 Botón de email directo al contacto');
@@ -836,6 +840,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log('DOM initialized, screens:', screens);
 
+    // Check for pending drafts on startup
+    setTimeout(() => {
+        checkPendingDrafts();
+    }, 1000); // Wait 1 second after DOM load
+
     document.querySelectorAll('.equipment-card').forEach(card => {
         card.addEventListener('click', () => {
             const type = card.dataset.type;
@@ -1055,6 +1064,10 @@ function startInspection(type) {
     console.log('Showing inspection screen...');
     showScreen('inspection');
     updateProgress();
+
+    // Start auto-save system
+    startAutoSave();
+    console.log('🔄 Sistema de auto-guardado iniciado');
 }
 
 function resetInspectionForm() {
@@ -1092,18 +1105,33 @@ function generateChecklist(items) {
             </select>
         `;
         container.appendChild(div);
-    });
 
-    // Add event listeners
-    container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-        checkbox.addEventListener('change', updateProgress);
-    });
+        // Add auto-save trigger when checkbox or select changes
+        const checkbox = div.querySelector('input[type="checkbox"]');
+        const select = div.querySelector('.status-select');
 
-    container.querySelectorAll('.status-select').forEach(select => {
-        select.addEventListener('change', function() {
-            updateProgress();
-            updateChecklistItemVisualState(this);
-        });
+        if (checkbox) {
+            checkbox.addEventListener('change', () => {
+                updateProgress();
+                // Trigger auto-save when 25%, 50%, 75%, 100% complete
+                const checkboxes = document.querySelectorAll('#checklistContainer input[type="checkbox"]').length;
+                const checked = document.querySelectorAll('#checklistContainer input[type="checkbox"]:checked').length;
+                const percentage = Math.round((checked / checkboxes) * 100);
+
+                if (percentage % 25 === 0 && percentage > 0) {
+                    console.log(`✓ ${percentage}% completado - Guardando automáticamente...`);
+                    triggerAutoSave();
+                }
+            });
+        }
+
+        if (select) {
+            select.addEventListener('change', function() {
+                updateProgress();
+                updateChecklistItemVisualState(this);
+                triggerAutoSave();
+            });
+        }
     });
 }
 
@@ -1133,9 +1161,188 @@ function updateProgress() {
     document.getElementById('progressText').textContent = `${percentage}%`;
 }
 
+// ===== Auto-Save System =====
+let autoSaveInterval = null;
+let lastAutoSave = null;
+
+function startAutoSave() {
+    // Clear any existing interval
+    if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+    }
+
+    // Auto-save every 30 seconds
+    autoSaveInterval = setInterval(() => {
+        if (validateBasicInfo()) {
+            saveInspection('draft');
+            showAutoSaveIndicator();
+            console.log('✅ Auto-guardado realizado');
+        }
+    }, 30000); // 30 seconds
+
+    console.log('🔄 Auto-guardado activado (cada 30 segundos)');
+}
+
+function stopAutoSave() {
+    if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+        autoSaveInterval = null;
+        console.log('⏹️ Auto-guardado desactivado');
+    }
+}
+
+function showAutoSaveIndicator() {
+    const indicator = document.getElementById('autoSaveIndicator');
+    if (!indicator) {
+        // Create indicator if it doesn't exist
+        const newIndicator = document.createElement('div');
+        newIndicator.id = 'autoSaveIndicator';
+        newIndicator.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            z-index: 10000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+        newIndicator.innerHTML = '✓ Guardado automáticamente';
+        document.body.appendChild(newIndicator);
+
+        setTimeout(() => {
+            newIndicator.style.opacity = '1';
+        }, 10);
+    } else {
+        indicator.style.opacity = '1';
+    }
+
+    // Hide after 2 seconds
+    setTimeout(() => {
+        const ind = document.getElementById('autoSaveIndicator');
+        if (ind) {
+            ind.style.opacity = '0';
+        }
+    }, 2000);
+
+    lastAutoSave = new Date();
+}
+
+// Manual save trigger (when important changes happen)
+function triggerAutoSave() {
+    if (validateBasicInfo()) {
+        saveInspection('draft');
+        showAutoSaveIndicator();
+    }
+}
+
+// Check for pending drafts on startup
+function checkPendingDrafts() {
+    const inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+    const drafts = inspections.filter(i => i.status === 'draft');
+
+    if (drafts.length > 0) {
+        const draftList = drafts.map(d => `
+            <div style="padding: 10px; margin: 5px 0; background: rgba(255,255,255,0.1); border-radius: 8px;">
+                <strong>${d.equipmentName || d.equipmentType}</strong><br>
+                <small>ID: ${d.equipmentId} | ${new Date(d.updatedAt).toLocaleString()}</small>
+            </div>
+        `).join('');
+
+        const message = `
+            <div style="text-align: left;">
+                <p style="margin-bottom: 15px;">Se encontraron <strong>${drafts.length}</strong> inspección(es) sin finalizar:</p>
+                ${draftList}
+                <p style="margin-top: 15px;">¿Deseas recuperar el último borrador?</p>
+            </div>
+        `;
+
+        if (confirm('⚠️ Tienes inspecciones sin finalizar. ¿Deseas recuperarlas?')) {
+            // Load the most recent draft
+            const mostRecent = drafts.sort((a, b) =>
+                new Date(b.updatedAt) - new Date(a.updatedAt)
+            )[0];
+
+            loadDraftInspection(mostRecent);
+        }
+    }
+}
+
+function loadDraftInspection(draft) {
+    console.log('📂 Cargando borrador:', draft);
+
+    // Set current inspection
+    currentInspection = draft;
+    currentEquipmentType = draft.equipmentType;
+
+    // Find and set work center if exists
+    if (draft.workCenterId) {
+        const center = getWorkCenter(draft.workCenterId);
+        if (center) {
+            currentWorkCenter = center;
+        }
+    }
+
+    // Navigate to inspection screen
+    startInspection(draft.equipmentType);
+
+    // Fill in the form with draft data
+    setTimeout(() => {
+        document.getElementById('equipmentId').value = draft.equipmentId || '';
+        document.getElementById('location').value = draft.location || '';
+        document.getElementById('inspectionDate').value = draft.inspectionDate || '';
+        document.getElementById('technician').value = draft.technician || '';
+        document.getElementById('manufacturer').value = draft.manufacturer || '';
+        document.getElementById('brand').value = draft.brand || '';
+        document.getElementById('model').value = draft.model || '';
+        document.getElementById('manufacturingDate').value = draft.manufacturingDate || '';
+        document.getElementById('lastRetestDate').value = draft.lastRetestDate || '';
+        document.getElementById('observations').value = draft.observations || '';
+        document.getElementById('recommendations').value = draft.recommendations || '';
+
+        // Restore checklist state
+        if (draft.checklist && draft.checklist.length > 0) {
+            document.querySelectorAll('#checklistContainer .checklist-item').forEach((item, index) => {
+                if (draft.checklist[index]) {
+                    const checkbox = item.querySelector('input[type="checkbox"]');
+                    const select = item.querySelector('.status-select');
+
+                    if (checkbox) checkbox.checked = draft.checklist[index].checked;
+                    if (select) select.value = draft.checklist[index].status;
+                }
+            });
+        }
+
+        // Restore pressure group fields if applicable
+        if (draft.equipmentType === 'grupos-presion') {
+            if (draft.nominalFlow) document.getElementById('nominalFlow').value = draft.nominalFlow;
+            if (draft.nominalPressure) document.getElementById('nominalPressure').value = draft.nominalPressure;
+            if (draft.power) document.getElementById('power').value = draft.power;
+            if (draft.rpm) document.getElementById('rpm').value = draft.rpm;
+            if (draft.pressureZero) document.getElementById('pressureZero').value = draft.pressureZero;
+            if (draft.pressure50) document.getElementById('pressure50').value = draft.pressure50;
+            if (draft.pressureNominal) document.getElementById('pressureNominal').value = draft.pressureNominal;
+            if (draft.pressureOverload) document.getElementById('pressureOverload').value = draft.pressureOverload;
+        }
+
+        updateProgress();
+
+        showToast('✅ Borrador recuperado correctamente', 'success');
+        console.log('✅ Borrador cargado completamente');
+    }, 500);
+}
+
 // ===== Form Submission =====
 document.getElementById('submitBtn').addEventListener('click', () => {
     if (validateForm()) {
+        // Stop auto-save before completing
+        stopAutoSave();
+
         saveInspection('completed');
 
         // If in AppSheet mode and has return URL, send data back
