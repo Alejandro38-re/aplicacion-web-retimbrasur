@@ -1565,9 +1565,14 @@ function saveInspection(status) {
     const existingIndex = inspections.findIndex(i => i.id === inspection.id);
     if (existingIndex >= 0) {
         inspections[existingIndex] = inspection;
+        console.log('✏️ Updated existing inspection at index:', existingIndex, 'ID:', inspection.id);
     } else {
         inspections.push(inspection);
+        console.log('➕ Added new inspection at index:', inspections.length - 1, 'ID:', inspection.id);
     }
+
+    console.log('💾 Saving to localStorage. Total inspections:', inspections.length);
+    console.log('💾 All inspection IDs:', inspections.map(i => ({ id: i.id, equipmentId: i.equipmentId, status: i.status })));
 
     localStorage.setItem('inspections', JSON.stringify(inspections));
     currentInspection = inspection;
@@ -3752,15 +3757,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== INTEGRATE PHOTOS WITH SAVE INSPECTION =====
     const originalSaveInspection = window.saveInspection;
     window.saveInspection = function (status = 'draft') {
+        console.log('📸 WRAPPER (Photos) - BEFORE save. Inspections count:', inspections.length);
+
         // Call original function
         const result = originalSaveInspection.call(this, status);
+
+        console.log('📸 WRAPPER (Photos) - AFTER save. Inspections count:', inspections.length);
 
         // Add photos to the last saved inspection if available
         if (currentPhotosArray.length > 0 && inspections.length > 0) {
             const lastInspection = inspections[inspections.length - 1];
+            console.log('📸 Adding photos to inspection:', lastInspection.id, 'Status:', lastInspection.status);
             lastInspection.photos = [...currentPhotosArray];
             // Keep first photo as legacy 'photo' for backward compatibility
             lastInspection.photo = currentPhotosArray[0];
+
+            console.log('📸 SAVING ALL INSPECTIONS to localStorage:', inspections.map(i => ({ id: i.id, status: i.status })));
             localStorage.setItem('inspections', JSON.stringify(inspections));
         }
 
