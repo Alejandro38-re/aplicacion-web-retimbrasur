@@ -1,4 +1,4 @@
-const CACHE_NAME = 'retimbrasur-v2.2.3-auto-update';
+const CACHE_NAME = 'retimbrasur-v2.3.0-autosave';
 const CACHE_ASSETS = [
   './index.html',
   './app.js',
