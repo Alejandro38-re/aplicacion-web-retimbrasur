@@ -4053,7 +4053,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const centerInspections = inspections.filter(i => i.workCenterId === currentWorkCenter.id);
+        // Filter only completed inspections for the center
+        const centerInspections = inspections.filter(i =>
+            i.workCenterId === currentWorkCenter.id && i.status === 'completed'
+        );
+
+        console.log('📊 generateCenterReport - Total inspections:', inspections.length);
+        console.log('📊 Current work center ID:', currentWorkCenter.id);
+        console.log('📊 Center inspections found (completed only):', centerInspections.length);
+        console.log('📊 Center inspections:', centerInspections.map(i => ({
+            id: i.id,
+            equipmentId: i.equipmentId,
+            type: i.equipmentType,
+            workCenterId: i.workCenterId,
+            status: i.status
+        })));
 
         if (centerInspections.length === 0) {
             showToast('No hay inspecciones para este centro', 'warning');
@@ -4063,11 +4077,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // Group by equipment
         const equipmentGroups = {};
         centerInspections.forEach(insp => {
-            if (!equipmentGroups[insp.equipmentId]) {
-                equipmentGroups[insp.equipmentId] = [];
+            // Normalize equipment ID
+            const normalizedId = insp.equipmentId.trim();
+
+            if (!equipmentGroups[normalizedId]) {
+                equipmentGroups[normalizedId] = [];
             }
-            equipmentGroups[insp.equipmentId].push(insp);
+            equipmentGroups[normalizedId].push(insp);
         });
+
+        console.log('📊 Equipment groups:', Object.keys(equipmentGroups));
+        console.log('📊 Equipment groups details:', equipmentGroups);
 
         // Generate consolidated HTML
         let reportHTML = `
