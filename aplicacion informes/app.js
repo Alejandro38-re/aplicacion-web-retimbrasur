@@ -409,7 +409,16 @@ function addEquipmentToCenter(centerId, equipment) {
     const center = getWorkCenter(centerId);
     if (!center) return null;
 
+    // Normalize equipment ID
+    if (equipment.id) {
+        equipment.id = equipment.id.trim();
+    }
+
+    console.log('🔧 addEquipmentToCenter - Looking for equipment with ID:', equipment.id);
+    console.log('🔧 Current equipment in center:', center.equipment.map(e => ({ id: e.id, type: e.type })));
+
     const existingEquipmentIndex = center.equipment.findIndex(e => e.id === equipment.id);
+    console.log('🔧 existingEquipmentIndex:', existingEquipmentIndex);
 
     if (existingEquipmentIndex >= 0) {
         center.equipment[existingEquipmentIndex] = {
@@ -417,13 +426,16 @@ function addEquipmentToCenter(centerId, equipment) {
             ...equipment,
             updatedAt: new Date().toISOString()
         };
+        console.log('✅ Equipment UPDATED:', center.equipment[existingEquipmentIndex]);
     } else {
-        center.equipment.push({
+        const newEquipment = {
             ...equipment,
             id: equipment.id || generateId(),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
-        });
+        };
+        center.equipment.push(newEquipment);
+        console.log('✅ Equipment CREATED:', newEquipment);
     }
 
     saveWorkCenter(center);
@@ -454,6 +466,9 @@ function getEquipmentById(centerId, equipmentId) {
         return null;
     }
 
+    // Normalize equipment ID
+    const normalizedId = equipmentId.trim();
+
     const equipment = getEquipmentByCenter(centerId);
 
     // Validate equipment array exists
@@ -462,7 +477,13 @@ function getEquipmentById(centerId, equipmentId) {
         return null;
     }
 
-    return equipment.find(e => e.id === equipmentId) || null;
+    console.log('🔍 getEquipmentById - Searching for ID:', normalizedId);
+    console.log('🔍 Available equipment IDs:', equipment.map(e => e.id));
+
+    const found = equipment.find(e => e.id === normalizedId) || null;
+    console.log('🔍 Equipment found:', found ? 'YES' : 'NO', found);
+
+    return found;
 }
 
 // ===== Data Structures =====
@@ -1417,7 +1438,7 @@ function saveInspection(status) {
         id: currentInspection?.id || generateId(),
         equipmentType: currentEquipmentType,
         equipmentName: equipment.name,
-        equipmentId: document.getElementById('equipmentId').value,
+        equipmentId: document.getElementById('equipmentId').value.trim(),
         location: document.getElementById('location').value,
         inspectionDate: document.getElementById('inspectionDate').value,
         technician: document.getElementById('technician').value,
@@ -1487,8 +1508,11 @@ function saveInspection(status) {
             inspection.maintenanceType || appSheetData.maintenanceType || 'SEMESTRAL'
         );
 
+        // Normalize equipment ID (trim whitespace)
+        const normalizedEquipmentId = (currentEquipmentId || inspection.equipmentId).trim();
+
         const equipmentData = {
-            id: currentEquipmentId || inspection.equipmentId,
+            id: normalizedEquipmentId,
             type: currentEquipmentType,
             location: inspection.location,
             manufacturer: inspection.manufacturer,
@@ -1506,6 +1530,7 @@ function saveInspection(status) {
         console.log('🔍 DEBUG - saveInspection():', {
             currentEquipmentId,
             'inspection.equipmentId': inspection.equipmentId,
+            normalizedEquipmentId,
             'equipmentData.id': equipmentData.id,
             'currentWorkCenter.id': currentWorkCenter.id,
             shouldSaveEquipment
