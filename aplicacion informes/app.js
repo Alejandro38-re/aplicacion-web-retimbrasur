@@ -3324,9 +3324,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('continueToCenterBtn').addEventListener('click', () => {
+        console.log('🏢 Continue to center clicked');
+        console.log('🏢 currentWorkCenter:', currentWorkCenter);
+
         if (currentWorkCenter) {
-            loadEquipmentList(currentWorkCenter.id);
-            showScreen('welcome');
+            console.log('🏢 Loading equipment list for center:', currentWorkCenter.id);
+            try {
+                loadEquipmentList(currentWorkCenter.id);
+                console.log('🏢 Equipment list loaded successfully');
+                showScreen('welcome');
+                console.log('🏢 Screen changed to welcome');
+            } catch (error) {
+                console.error('❌ Error loading equipment list:', error);
+                showToast('Error al cargar la lista de equipos', 'error');
+            }
+        } else {
+            console.warn('⚠️ No currentWorkCenter set!');
+            showToast('No hay centro de trabajo seleccionado', 'error');
         }
     });
 
@@ -3795,10 +3809,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== LOAD EQUIPMENT LIST WITH DELETE BUTTONS AND CENTER REPORT =====
     const originalLoadEquipmentList = window.loadEquipmentList;
     window.loadEquipmentList = function (centerId) {
+        console.log('📋 loadEquipmentList WRAPPER 1 called with centerId:', centerId);
+
         const container = document.getElementById('equipmentListContainer');
+        if (!container) {
+            console.error('❌ equipmentListContainer not found in DOM!');
+            return;
+        }
+
         const equipment = getEquipmentByCenter(centerId);
         const center = getWorkCenter(centerId);
-        const centerInspections = inspections.filter(i => i.workCenterId === centerId);
+
+        // Reload inspections from localStorage to ensure fresh data
+        const freshInspections = JSON.parse(localStorage.getItem('inspections')) || [];
+        const centerInspections = freshInspections.filter(i => i.workCenterId === centerId);
+
+        console.log('📋 Equipment found:', equipment.length);
+        console.log('📋 Center:', center);
+        console.log('📋 Center inspections:', centerInspections.length);
 
         document.getElementById('centerNameTitle').textContent = center ? center.name : 'Equipos del Centro';
 
