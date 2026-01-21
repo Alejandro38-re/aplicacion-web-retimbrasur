@@ -4060,17 +4060,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== GENERATE CONSOLIDATED CENTER REPORT =====
     function generateCenterReport() {
+        console.log('🚀 generateCenterReport CALLED');
+
         if (!currentWorkCenter) {
+            console.error('❌ No currentWorkCenter!');
             showToast('No hay centro seleccionado', 'error');
             return;
         }
 
+        console.log('✅ Current work center:', currentWorkCenter);
+
+        // IMPORTANT: Reload inspections from localStorage to ensure fresh data
+        const freshInspections = JSON.parse(localStorage.getItem('inspections')) || [];
+        console.log('🔄 Reloaded inspections from localStorage:', freshInspections.length);
+
         // Filter only completed inspections for the center
-        const centerInspections = inspections.filter(i =>
+        const centerInspections = freshInspections.filter(i =>
             i.workCenterId === currentWorkCenter.id && i.status === 'completed'
         );
 
-        console.log('📊 generateCenterReport - Total inspections:', inspections.length);
+        console.log('📊 generateCenterReport - Total inspections:', freshInspections.length);
         console.log('📊 Current work center ID:', currentWorkCenter.id);
         console.log('📊 Center inspections found (completed only):', centerInspections.length);
         console.log('📊 Center inspections:', centerInspections.map(i => ({
@@ -4082,6 +4091,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })));
 
         if (centerInspections.length === 0) {
+            console.warn('⚠️ No inspections found for this center');
             showToast('No hay inspecciones para este centro', 'warning');
             return;
         }
