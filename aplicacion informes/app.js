@@ -718,6 +718,13 @@ let currentEquipmentType = null;
 let inspections = JSON.parse(localStorage.getItem('inspections')) || [];
 let currentInspection = null;
 
+// Reload inspections from localStorage to sync with latest data
+function reloadInspections() {
+    inspections = JSON.parse(localStorage.getItem('inspections')) || [];
+    console.log('🔄 Inspections reloaded from localStorage:', inspections.length);
+    return inspections;
+}
+
 // ===== INSPECTION REMINDER SYSTEM =====
 // Periodicidad de inspecciones por tipo de equipo (en meses)
 const inspectionPeriodicity = {
@@ -3779,15 +3786,25 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('📸 WRAPPER (Photos) - AFTER save. Inspections count:', inspections.length);
 
         // Add photos to the last saved inspection if available
-        if (currentPhotosArray.length > 0 && inspections.length > 0) {
-            const lastInspection = inspections[inspections.length - 1];
-            console.log('📸 Adding photos to inspection:', lastInspection.id, 'Status:', lastInspection.status);
-            lastInspection.photos = [...currentPhotosArray];
-            // Keep first photo as legacy 'photo' for backward compatibility
-            lastInspection.photo = currentPhotosArray[0];
+        if (currentPhotosArray.length > 0 && currentInspection) {
+            // CRITICAL: Reload from localStorage to avoid overwriting other inspections
+            const freshInspections = JSON.parse(localStorage.getItem('inspections')) || [];
+            const targetIndex = freshInspections.findIndex(i => i.id === currentInspection.id);
 
-            console.log('📸 SAVING ALL INSPECTIONS to localStorage:', inspections.map(i => ({ id: i.id, status: i.status })));
-            localStorage.setItem('inspections', JSON.stringify(inspections));
+            if (targetIndex >= 0) {
+                console.log('📸 Adding photos to inspection:', freshInspections[targetIndex].id, 'Status:', freshInspections[targetIndex].status);
+                freshInspections[targetIndex].photos = [...currentPhotosArray];
+                // Keep first photo as legacy 'photo' for backward compatibility
+                freshInspections[targetIndex].photo = currentPhotosArray[0];
+
+                console.log('📸 SAVING UPDATED INSPECTIONS to localStorage');
+                localStorage.setItem('inspections', JSON.stringify(freshInspections));
+
+                // Sync global variable
+                inspections = freshInspections;
+            } else {
+                console.warn('⚠️ Could not find inspection to add photos:', currentInspection.id);
+            }
         }
 
         // Add photos to equipment if saving to center
@@ -4477,9 +4494,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Generate statistics for a work center
     function generateStatistics(centerId) {
+        console.log('📊 generateStatistics CALLED for center:', centerId);
+
         const center = getWorkCenter(centerId);
         const equipment = getEquipmentByCenter(centerId);
-        const centerInspections = inspections.filter(i => i.workCenterId === centerId && i.status === 'completed');
+
+        // IMPORTANT: Reload inspections from localStorage to ensure fresh data
+        const freshInspections = JSON.parse(localStorage.getItem('inspections')) || [];
+        const centerInspections = freshInspections.filter(i => i.workCenterId === centerId && i.status === 'completed');
+
+        console.log('📊 STATS - Fresh inspections loaded:', freshInspections.length);
+        console.log('📊 STATS - Center inspections (completed):', centerInspections.length);
+        console.log('📊 STATS - Equipment in center:', equipment.length);
 
         // Update subtitle
         document.getElementById('statsSubtitle').textContent = center ? center.name : 'Análisis y métricas';
@@ -4889,11 +4915,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = originalSaveInspectionWithSignatures.call(this, status);
 
             // Add signatures to last inspection
-            if (inspections.length > 0) {
-                const lastInspection = inspections[inspections.length - 1];
-                if (technicianSignatureData) lastInspection.technicianSignature = technicianSignatureData;
-                if (clientSignatureData) lastInspection.clientSignature = clientSignatureData;
-                localStorage.setItem('inspections', JSON.stringify(inspections));
+            if (currentInspection && (technicianSignatureData || clientSignatureData)) {
+                // CRITICAL: Reload from localStorage to avoid overwriting other inspections
+                const freshInspections = JSON.parse(localStorage.getItem('inspections')) || [];
+                const targetIndex = freshInspections.findIndex(i => i.id === currentInspection.id);
+
+                if (targetIndex >= 0) {
+                    console.log('✍️ Adding signatures to inspection:', freshInspections[targetIndex].id);
+                    if (technicianSignatureData) freshInspections[targetIndex].technicianSignature = technicianSignatureData;
+                    if (clientSignatureData) freshInspections[targetIndex].clientSignature = clientSignatureData;
+                    localStorage.setItem('inspections', JSON.stringify(freshInspections));
+
+                    // Sync global variable
+                    inspections = freshInspections;
+                } else {
+                    console.warn('⚠️ Could not find inspection to add signatures:', currentInspection.id);
+                }
             }
 
             return result;
@@ -5999,10 +6036,22 @@ document.addEventListener('DOMContentLoaded', () => {
         window.saveInspection = function(status) {
             const result = originalSaveInspectionWithGPS.call(this, status);
 
-            if (window.lastGPSCoordinates && inspections.length > 0) {
-                const lastInspection = inspections[inspections.length - 1];
-                lastInspection.gpsCoordinates = window.lastGPSCoordinates;
-                localStorage.setItem('inspections', JSON.stringify(inspections));
+            if (window.lastGPSCoordinates && currentInspection) {
+                // CRITICAL: Reload from localStorage to avoid overwriting other inspections
+                const freshInspections = JSON.parse(localStorage.getItem('inspections')) || [];
+                const targetIndex = freshInspections.findIndex(i => i.id === currentInspection.id);
+
+                if (targetIndex >= 0) {
+                    console.log('📍 Adding GPS to inspection:', freshInspections[targetIndex].id);
+                    freshInspections[targetIndex].gpsCoordinates = window.lastGPSCoordinates;
+                    localStorage.setItem('inspections', JSON.stringify(freshInspections));
+
+                    // Sync global variable
+                    inspections = freshInspections;
+                } else {
+                    console.warn('⚠️ Could not find inspection to add GPS:', currentInspection.id);
+                }
+
                 window.lastGPSCoordinates = null;
             }
 
